@@ -1,10 +1,7 @@
 ﻿###################################################################################################
-#move request functions
-###################################################################################################
-###############################################################################################
 #Module Variables and Variable Functions
-###############################################################################################
-function Get-ModuleVariable
+###################################################################################################
+function Get-MRMVariable
 {
 param
 (
@@ -12,7 +9,7 @@ param
 )
     Get-Variable -Scope Script -Name $name 
 }
-function Get-ModuleVariableValue
+function Get-MRMVariableValue
 {
 param
 (
@@ -20,7 +17,7 @@ param
 )
     Get-Variable -Scope Script -Name $name -ValueOnly
 }
-function Set-ModuleVariable
+function Set-MRMVariable
 {
 param
 (
@@ -30,7 +27,7 @@ $Value
 )
     Set-Variable -Scope Script -Name $Name -Value $value  
 }
-function New-ModuleVariable
+function New-MRMVariable
 {
 param 
 (
@@ -40,7 +37,7 @@ $Value
 )
     New-Variable -Scope Script -Name $name -Value $Value
 }
-function Remove-ModuleVariable
+function Remove-MRMVariable
 {
 param
 (
@@ -48,8 +45,10 @@ param
 )
     Remove-Variable -Scope Script -Name $name
 }
-###############################################################################################
-Function New-MoveRequest 
+###################################################################################################
+#move request functions
+###################################################################################################
+Function New-MRMMoveRequest
 {
 [cmdletbinding()]
 param
@@ -181,7 +180,7 @@ $LogFileBaseName = ('_NewWaveBatchMoveRequest.log')
         }
     }#ForEach
 }
-function Set-MoveRequestForCompletion 
+function Set-MRMMoveRequestForCompletion
 {
 [cmdletbinding()]
 param
@@ -237,7 +236,7 @@ param
         }
     }
 }
-function Start-MoveRequestCompletion 
+function Start-MRMMoveRequestCompletion
 {
 [cmdletbinding()]
 param
@@ -331,7 +330,7 @@ $CountsMatch = ($WaveSourceData.count -eq $mr.Count)
         Write-Log -verbose -errorlog -Message "ERROR: Unable to Proceed with Move Request Completions for $wave because Migration Wave Tracking and Mailbox Move List Convergence Check FAILED" 
     }
 }
-function Get-MoveRequestReport {
+function Get-MRMMoveRequestReport {
 [cmdletbinding()]
 param(
     [string]$Wave
@@ -504,7 +503,7 @@ End {
     }
 }
 }
-function Watch-MoveRequest {
+function Watch-MRMMoveRequest {
 [cmdletbinding()]
 param(
     [parameter()]
@@ -723,7 +722,7 @@ switch ($operation) {
     }
 }
 }
-Function Watch-MoveRequestContinuously {
+Function Watch-MRMMoveRequestContinuously {
     param(
     [parameter(Mandatory=$true)]
     [string]$Wave
@@ -774,7 +773,7 @@ Function Watch-MoveRequestContinuously {
     }
 }
 #New/Experimental:
-function Start-BackgroundWMRC {
+function Start-MRMBackgroundWMRC {
 [cmdletbinding()]
 param
 (
@@ -820,7 +819,7 @@ $startcomplexjobparams=
 }#startcomplexjobparams
 }
 #not yet updated
-function Get-TrackingAndRequestConvergenceStatus {
+function Get-MRMTrackingAndRequestConvergenceStatus {
 [cmdletbinding()]
 param(
 [parameter(Mandatory = $True)]
@@ -883,7 +882,7 @@ param(
         
     }
 }
-function Get-NonDeletedLargeItemReport {
+function Get-MRMNonDeletedLargeItemReport {
 [cmdletbinding()]
 param(
     [string]$Wave
@@ -951,7 +950,7 @@ o:312-589-2080  m:864-233-6174 | mike.campbell@perficient.com
 ###################################################################################################
 #pre/post migration configuration functions
 ###################################################################################################
-function Set-MailboxConfigurationOptions {
+function Set-MRMMailboxConfigurationOptions {
 [cmdletbinding()]
 param(
 [parameter(mandatory=$true, parametersetname='MigrationWave')]
@@ -1199,7 +1198,7 @@ if ($failedconfigurations.count -gt 0) {
     Export-Data -DataToExportTitle MailboxConfigurationFailures -DataToExport $failedconfigurations -datatype csv -exportFolderPath $Global:trackingfolder
 }
 }
-function Set-FullAccessPermissions {
+function Set-MRMFullAccessPermissions {
 [cmdletbinding()]
 param(
     [switch]$SingleMailbox
@@ -1253,7 +1252,7 @@ if ($RecordCount -gt 0) {
         Write-Progress -Activity "Granting FullAccess Permissions in Exchange Online to Mirror Exchange On Prem SendAS Permissions." -Status "Processing Record $b of $RecordCount" -Completed
 }
 }
-function Set-ForwardingConfiguration {
+function Set-MRMForwardingConfiguration {
 [cmdletbinding()]
 param(
 [parameter(Mandatory=$True,ValueFromPipeline = $true)]
@@ -1299,7 +1298,7 @@ $errorlogpath
     }
     Else {Write-Log -message "No Forwarding Configuration Found for $identityPrimarySmtpAddress." -logpath $logpath -Verbose}
 }
-Function Set-MailboxQuotas {
+Function Set-MRMMailboxQuotas {
 [cmdletbinding()]
 Param(
 [parameter(Mandatory=$True,Position=0)]
