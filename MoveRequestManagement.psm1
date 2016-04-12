@@ -1,7 +1,55 @@
 ﻿###################################################################################################
 #move request functions
 ###################################################################################################
-Function New-WaveBatchMoveRequest 
+###############################################################################################
+#Module Variables and Variable Functions
+###############################################################################################
+function Get-ModuleVariable
+{
+param
+(
+[string]$Name
+)
+    Get-Variable -Scope Script -Name $name 
+}
+function Get-ModuleVariableValue
+{
+param
+(
+[string]$Name
+)
+    Get-Variable -Scope Script -Name $name -ValueOnly
+}
+function Set-ModuleVariable
+{
+param
+(
+[string]$Name
+,
+$Value
+)
+    Set-Variable -Scope Script -Name $Name -Value $value  
+}
+function New-ModuleVariable
+{
+param 
+(
+[string]$Name
+,
+$Value
+)
+    New-Variable -Scope Script -Name $name -Value $Value
+}
+function Remove-ModuleVariable
+{
+param
+(
+[string]$Name
+)
+    Remove-Variable -Scope Script -Name $name
+}
+###############################################################################################
+Function New-MoveRequest 
 {
 [cmdletbinding()]
 param
@@ -133,9 +181,11 @@ $LogFileBaseName = ('_NewWaveBatchMoveRequest.log')
         }
     }#ForEach
 }
-function Set-WaveBatchMoveRequestForCompletion {
+function Set-MoveRequestForCompletion 
+{
 [cmdletbinding()]
-param(
+param
+(
     [string]$wave
     ,
     [parameter(Mandatory=$True)]
@@ -169,7 +219,8 @@ param(
     $SMRQParams.Confirm = $False
     $RecordCount = $ToProcess.count
     $b=0
-    foreach ($request in $ToProcess) {
+    foreach ($request in $ToProcess) 
+    {
         $b++
         $SMRQParams.Identity = $request.Exchangeguid.guid
         $logstring = "Set Properties of Move Request $($Request.DisplayName) for Completion Preparation"
@@ -186,9 +237,11 @@ param(
         }
     }
 }
-function Start-WaveBatchMoveRequestCompletion {
+function Start-MoveRequestCompletion 
+{
 [cmdletbinding()]
-param(
+param
+(
     [parameter(Mandatory = $true)]
     [string]$wave
     ,
@@ -201,34 +254,38 @@ param(
     [string]$MigrationBlockListFilePath
     , 
     [string]$ExchangeOrganization #convert to dynamic parameter 
-)
-
-    [string]$stamp = Get-Date -Format yyyyMMdd_hhmm
-    [string]$LogPath = ($trackingfolder + $stamp + '-' + $wave + $LogFileBasePath)
-    [string]$ErrorLogPath = ($trackingfolder + $stamp + '-ERRORS-' + $wave + $LogFileBasePath)
+    ,
     $SourceData = $Global:SourceData
-    switch ($wavetype) {
+)
+[string]$stamp = Get-Date -Format yyyyMMdd_hhmm
+[string]$LogPath = ($trackingfolder + $stamp + '-' + $wave + $LogFileBasePath)
+[string]$ErrorLogPath = ($trackingfolder + $stamp + '-ERRORS-' + $wave + $LogFileBasePath)
+switch ($wavetype)
+{
         'Full' {$WaveSourceData = $SourceData | Where-Object {$_.Wave -match "\b$wave(\.\S*|\b)"}}
         'Sub' {$WaveSourceData = $SourceData | Where-Object {$_.wave -eq $wave}}
-    }
-    if ($MigrationBlockListFilePath) {
-        Try {
+}
+if ($MigrationBlockListFilePath) 
+{
+    Try
+    {
             $MigrationBlockList = Import-Csv $MigrationBlockListFilePath -ErrorAction Stop
             $MigrationBlockListPSMTP = $MigrationBlockList | select-object -ExpandProperty PrimarySmtpAddress
-        }
-        Catch {
+    }
+    Catch
+    {
             $proceed = $false
             $_
-        }
     }
+}
 
     #check for convergence of Move Requests and Wave Tracking
-    Get-MoveRequestReportData -Wave $wave -WaveType $wavetype -operation WaveMonitoring -ExchangeOrganization $ExchangeOrganization
-    $mraliases = @($Global:mr | select-object -ExpandProperty Alias)
-    $wtaliases = @($WaveSourceData | Select-Object -ExpandProperty Alias) #PrimarySmtpAddress | Get-OPRecipient | Select-Object -ExpandProperty Alias
-    $unexpectedMR = @($mraliases | where-object {$_ -notin $wtaliases})
-    $missingMR = @($wtaliases | where-object {$_ -notin $mraliases})
-    $CountsMatch = ($WaveSourceData.count -eq $mr.Count)
+Get-MoveRequestReport -Wave $wave -WaveType $wavetype -operation WaveMonitoring -ExchangeOrganization $ExchangeOrganization
+$mraliases = @($Global:mr | select-object -ExpandProperty Alias)
+$wtaliases = @($WaveSourceData | Select-Object -ExpandProperty Alias) #PrimarySmtpAddress | Get-OPRecipient | Select-Object -ExpandProperty Alias
+$unexpectedMR = @($mraliases | where-object {$_ -notin $wtaliases})
+$missingMR = @($wtaliases | where-object {$_ -notin $mraliases})
+$CountsMatch = ($WaveSourceData.count -eq $mr.Count)
     IF ($CountsMatch -and $unexpectedMR.count -eq 0 -and $missingMR.count -eq 0) {
         $proceed = $true
         Write-Log -Message "Migration Wave Tracking and Mailbox Move List Convergence Check PASSED" -Verbose
@@ -251,11 +308,11 @@ param(
         $RecordCount = $Global:mr.count
         foreach ($request in $WaveSourceData) {
             $b++
-            Write-Progress -Activity "Processing move request resume for completion for all $wave move requests." -Status "Processing $($Request.DisplayName), record $b of $RecordCount." -PercentComplete ($b/$RecordCount*100)
+            Write-Progress -Activity "Processing move request resume for completion for all $wave move requests." -Status "Processing $($Request.PrimarySMTPAddress), record $b of $RecordCount." -PercentComplete ($b/$RecordCount*100)
             If ($request.PrimarySmtpAddress -notin $MigrationBlockListPSMTP) {
                 Connect-Exchange -ExchangeOrganization $ExchangeOrganization
                 Try {
-                    $logstring = "Resume Move Request $($Request.DisplayName)"
+                    $logstring = "Resume Move Request $($Request.PrimarySMTPAddress)"
                     Write-Log -Message $logstring -Verbose -EntryType Attempting
                     Resume-OLMoveRequest -Identity $request.PrimarySmtpAddress -ErrorAction Stop
                     Write-Log -Message $logstring -Verbose -EntryType Succeeded
@@ -274,7 +331,7 @@ param(
         Write-Log -verbose -errorlog -Message "ERROR: Unable to Proceed with Move Request Completions for $wave because Migration Wave Tracking and Mailbox Move List Convergence Check FAILED" 
     }
 }
-function Get-MoveRequestReportData {
+function Get-MoveRequestReport {
 [cmdletbinding()]
 param(
     [string]$Wave
@@ -469,44 +526,37 @@ param(
     ,
     [boolean]$MailNotification = $true
     ,
-    [switch]$Internal
+    [string[]]$Recipients
+    ,
+    [string]$Sender
     ,
     [string]$ExchangeOrganization
+    ,
+    $SourceData = $global:sourcedata
     #,
     #[switch]$SendUMWelcome
 )
 [string]$Stamp = Get-TimeStamp
-$LogFileBaseName = ('MonitorMoveRequest.log')
-$LogPath = $Global:LogFolderPath + $stamp + '-' + $wave + $LogFileBaseName
-$ErrorLogPath = $Global:LogFolderPath + $stamp + '-' + $wave + '-ERRORS' + $LogFileBaseName
-if (-not $global:WaveMigrationMonitoring) {$global:WaveMigrationMonitoring = @{}}
-if ($global:WaveMigrationMonitoring.$wave -eq 'Complete') {$MailNotification = $false}
-if ($Internal) {
-    $MailNotificationListFile = ($Global:ReferenceFolder + 'InternalMonitoringNotificationList.txt')
-}
-else {$MailNotificationListFile = ($Global:ReferenceFolder + 'MonitoringNotificationList.txt')}
-Write-Log -message "Selected Mail Notification List File $MailNotificationListFile." -Verbose 
-$SourceData = $global:sourcedata
+#$LogFileBaseName = ('MonitorMoveRequest.log')
+#$LogPath = $Global:LogFolderPath + $stamp + '-' + $wave + $LogFileBaseName
+#$ErrorLogPath = $Global:LogFolderPath + $stamp + '-' + $wave + '-ERRORS' + $LogFileBaseName
+if (-not (Test-Path 'variable:\WaveMigrationMonitoring')) {$Script:WaveMigrationMonitoring = @{}}
+if ($Script:WaveMigrationMonitoring.$wave -eq 'Complete') {$MailNotification = $false}
 switch ($wavetype) {
     'Full' {$WaveSourceData = $SourceData | Where-Object {$_.Wave -match "\b$wave(\.\S*|\b)"}}
     'Sub' {$WaveSourceData = $SourceData | Where-Object {$_.wave -eq $wave}}
 }
-
-
 Write-Log -message "Getting Migration Wave $wave Move Request Data." -Verbose 
 Get-MoveRequestReportData -wave $wave -WaveType $wavetype -operation WaveMonitoring -statsoperation All -ExchangeOrganization $ExchangeOrganization
 Write-Log -message "Received Migration Wave $wave Move Request Data." -Verbose 
-
-if ($global:ipmrs.count -lt 1) {$Global:WaveMigrationMonitoring.$wave = 'Complete'} else {$Global:WaveMigrationMonitoring.$wave = 'InProgress'; $MailNotification = $true} 
-
+if ($global:ipmrs.count -lt 1) {$Script:WaveMigrationMonitoring.$wave = 'Complete'} else {$Script:WaveMigrationMonitoring.$wave = 'InProgress'; $MailNotification = $true} 
 if ($mailNotification -and $Global:mr.count -gt 0) {
-    $MailNotificationList = @(Get-Content $MailNotificationListFile)
     [string]$MessageTimeStamp = (Get-Date -Format 'yyyy-MM-dd HH:mm') + ' Eastern'
     $sendmailparams = @{}
     $sendmailparams.Subject = "Automatically Generated Message: Wave $wave Mailbox Move Status Update as of $MessageTimeStamp"
     #below needs to go in admin user profile or org profile
-	$Sendmailparams.From = 'joe.sutherland@perficient.com'
-    $Sendmailparams.To = $MailNotificationList
+	$Sendmailparams.From = $Sender
+    $Sendmailparams.To = $Recipients
     $Sendmailparams.SmtpServer = $CurrentOrgProfile.general.mailrelayserverFQDN
     $sendmailparams.BodyAsHtml = $true
     $sendmailparams.Attachments = ($Global:ExportDataPath + 'AllStatus.csv')
@@ -601,7 +651,7 @@ $CR
 
     $Sendmailparams.Body = $Body
     Send-MailMessage @sendmailparams
-    Write-Log -message "Monitoring E-mail Message Sent to recipients in file $MailNotificationListFile " -Verbose 
+    Write-Log -message "Monitoring E-mail Message Sent to recipients $($Recipients -join ';') " -Verbose 
 }
 switch ($operation) {
     'Completion' {
@@ -770,7 +820,7 @@ $startcomplexjobparams=
 }#startcomplexjobparams
 }
 #not yet updated
-function Get-WaveBatchTrackingAndRequestConvergenceStatus {
+function Get-TrackingAndRequestConvergenceStatus {
 [cmdletbinding()]
 param(
 [parameter(Mandatory = $True)]
@@ -1149,7 +1199,7 @@ if ($failedconfigurations.count -gt 0) {
     Export-Data -DataToExportTitle MailboxConfigurationFailures -DataToExport $failedconfigurations -datatype csv -exportFolderPath $Global:trackingfolder
 }
 }
-function Set-OLFullAccessPermissions {
+function Set-FullAccessPermissions {
 [cmdletbinding()]
 param(
     [switch]$SingleMailbox
@@ -1203,7 +1253,7 @@ if ($RecordCount -gt 0) {
         Write-Progress -Activity "Granting FullAccess Permissions in Exchange Online to Mirror Exchange On Prem SendAS Permissions." -Status "Processing Record $b of $RecordCount" -Completed
 }
 }
-function Set-OLForwardingConfiguration {
+function Set-ForwardingConfiguration {
 [cmdletbinding()]
 param(
 [parameter(Mandatory=$True,ValueFromPipeline = $true)]
