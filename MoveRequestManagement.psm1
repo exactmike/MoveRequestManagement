@@ -255,6 +255,9 @@ param
     [string]$ExchangeOrganization #convert to dynamic parameter 
     ,
     $SourceData = $Script:SourceData
+    ,
+    [switch]$ByPassConvergenceCheck
+
 )
 [string]$stamp = Get-Date -Format yyyyMMdd_hhmm
 [string]$LogPath = ($trackingfolder + $stamp + '-' + $wave + $LogFileBasePath)
@@ -279,7 +282,7 @@ if ($MigrationBlockListFilePath)
 }
 
     #check for convergence of Move Requests and Wave Tracking
-Get-MoveRequestReport -Wave $wave -WaveType $wavetype -operation WaveMonitoring -ExchangeOrganization $ExchangeOrganization
+Get-MRMMoveRequestReport -Wave $wave -WaveType $wavetype -operation WaveMonitoring -ExchangeOrganization $ExchangeOrganization
 $mraliases = @($Script:mr | select-object -ExpandProperty Alias)
 $wtaliases = @($WaveSourceData | Select-Object -ExpandProperty Alias) #PrimarySmtpAddress | Get-OPRecipient | Select-Object -ExpandProperty Alias
 $unexpectedMR = @($mraliases | where-object {$_ -notin $wtaliases})
@@ -290,16 +293,12 @@ $CountsMatch = ($WaveSourceData.count -eq $mr.Count)
         Write-Log -Message "Migration Wave Tracking and Mailbox Move List Convergence Check PASSED" -Verbose
     }
     Else {
-        $proceed = $false
+        if ($ByPassConvergenceCheck) {$proceed = $true} else {$proceed = $false}
         Write-Log -Verbose -errorlog -Message "ERROR: Migration Wave Tracking and Mailbox Move List Convergence Check FAILED" 
-        Write-Output "Move Request Alias Count"
-        Write-Output $mraliases.count
-        Write-Output "Tracking data Alias Count"
-        Write-Output $wtaliases.count
-        Write-Output "Unexpected Move Requests"
-        Write-Output $unexpectedMR
-        Write-Output "Missing Move Requests"
-        Write-Output $missingMR
+        Write-Log "Move Request Alias Count: $($mraliases.count )" -Verbose -ErrorLog
+        Write-Log "Tracking data Alias Count: $($wtaliases.count)" -Verbose -ErrorLog
+        Write-Log "Unexpected Move Requests: $($unexpectedMR -join ',')" -Verbose -ErrorLog
+        Write-Log "Missing Move Requests: $($missingMR -join ',')" -Verbose -ErrorLog
     }
 
     if ($proceed) {
@@ -533,6 +532,13 @@ param
     $SourceData = $Script:sourcedata
     #add convergence check into report data based on Source Data
 )
+#check for the wave completion hash table and create it if it does not exist
+if (-not (Test-Path 'variable:\WaveMigrationOperationCompleted')) {$script:WaveMigrationOperationCompleted = @{}}
+#check for the wave completion entry in the wave completion hash table and create it if it does not exist
+if (-not ($script:WaveMigrationOperationCompleted.ContainsKey($wave))) {$script:WaveMigrationOperationCompleted.$wave = $False}
+#if the wave completion entry in the wave completion hash table indicates the wave is not complete, run the move request report
+if ($script:WaveMigrationOperationCompleted.$wave -eq $false)
+{
 [string]$Stamp = Get-TimeStamp
 switch ($wavetype) 
 {
@@ -545,7 +551,6 @@ Get-MRMMoveRequestReport -wave $wave -WaveType $wavetype -operation WaveMonitori
 Write-Log -message $message -Verbose -EntryType Succeeded 
 #check if the Wave Migration Monitoring Hash Table exists; if not, create it.  
 if (-not (Test-Path 'variable:\WaveMigrationMonitoring')) {$Script:WaveMigrationMonitoring = @{}}
-if (-not (Test-Path 'variable:\WaveMigrationOperationCompleted')){$script:WaveMigrationOperationCompleted = @{}}
 #check the Wave Migration Operation Status
 switch ($Operation)
 {
@@ -735,6 +740,7 @@ $CR
     Send-MailMessage @sendmailparams
     Write-Log -message "Monitoring E-mail Message Sent to recipients $($Recipients -join ';') " -Verbose 
 }
+}#if
 }#function Watch-MRMMoveRequest
 Function Watch-MRMMoveRequestContinuously
 {
