@@ -787,14 +787,14 @@ while ($True)
         }
         Watch-MRMMoveRequest @WMRParams
         $lastruncompletion = get-date
+        Write-Log "Last run of Watch-MoveRequest completed at $lastruncompletion." -Verbose -EntryType Notification
     }
     $timeremaining = $nextrun - $time
     $minutes = $timeremaining.Minutes
     $hours = $timeremaining.Hours
     if (($Minutes % 15) -eq 0 -or ($minutes -le 5 -and $hours -eq 0))
     {
-        Write-Log "Last run of Watch-MoveRequest completed at $lastruncompletion." -Verbose -EntryType Notification
-        Write-Log "Next run of Watch-MoveRequest occurs in $minutes at $nextrun" -Verbose -EntryType Notification
+        Write-Log "Next run of Watch-MoveRequest occurs in $minutes minutes at approximately $nextrun" -Verbose -EntryType Notification
     }
     #if ($resumeautosuspended) {#Run Resume AutoSuspended Code}
     #if ($resumefailed) {#Run Resume Failed Code}
@@ -803,7 +803,8 @@ while ($True)
 }#while
 }#function Watch-MRMMoveRequestContinuously
 #New/Experimental:
-function Start-MRMBackgroundWMRC {
+function Start-MRMBackgroundWMRC 
+{
 [cmdletbinding()]
 param
 (
