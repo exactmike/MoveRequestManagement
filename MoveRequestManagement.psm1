@@ -736,8 +736,10 @@ $CR
     Write-Log -message "Monitoring E-mail Message Sent to recipients $($Recipients -join ';') " -Verbose 
 }
 }#function Watch-MRMMoveRequest
-Function Watch-MRMMoveRequestContinuously {
-    param(
+Function Watch-MRMMoveRequestContinuously
+{
+param
+(
     [parameter(Mandatory=$true)]
     [string]$Wave
     ,
@@ -749,43 +751,57 @@ Function Watch-MRMMoveRequestContinuously {
     ,
     [int]$runperiod = 60
     ,
-    [switch]$completion
+    [parameter()]
+    [validateset('Completion','Synchronization')]
+    [string]$Operation
+    ,
+    [switch]$CompletedMailboxConfiguration
     ,
     [switch]$resumeautosuspended
     ,
     [switch]$resumefailed
     ,
-    [switch]$internal
+    [string[]]$Recipients
+    ,
+    [string]$Sender
     ,
     [string]$ExchangeOrganization #convert to Dynamic Parameter
-    )
-    while ($True) {
-        $time = get-date 
-        if ($time -ge $nextrun) { 
-            $lastrunstart = get-date
-            $nextrun = $nextrun.AddMinutes($runperiod)
-            Connect-Exchange -ExchangeOrganization $ExchangeOrganization
-            Write-Log "Running Watch-MoveRequest" -Verbose 
-            $WMRParams = @{}
-            if ($completion) {$WMRParams.Operation = 'Completion'} else {$WMRParams.Operation = 'Synchronization'}
-            if ($resumeautosuspended) {$WMRParams.ResumeAutosuspended = $true}
-            if ($resumefailed) {$WMRParams.ResumeFailed = $true}
-            if ($internal) {$WMRParams.Internal = $true}
-            $WMRParams.Wave = $Wave
-            $WMRParams.WaveType = $WaveType
-			$WMRParams.ExchangeOrganization = $ExchangeOrganization
-            Watch-MoveRequest @WMRParams
-            $lastruncompletion = get-date
+)
+while ($True)
+{
+    $time = get-date
+    if ($time -ge $nextrun)
+    {
+        $lastrunstart = get-date
+        $nextrun = $nextrun.AddMinutes($runperiod)
+        Connect-Exchange -ExchangeOrganization $ExchangeOrganization
+        Write-Log "Running Watch-MRMMoveRequest" -Verbose
+        $WMRParams =
+        @{
+            Operation = $Operation
+            Wave = $Wave
+            WaveType = $WaveType
+		    ExchangeOrganization = $ExchangeOrganization
+            Sender = $Sender
+            Recipients = $Recipients
         }
-        $timeremaining = $nextrun - $time
-        $minutes = $timeremaining.Minutes
-        $hours = $timeremaining.Hours
-        if (($Minutes % 15) -eq 0 -or ($minutes -le 5 -and $hours -eq 0)) {
-            Write-Host "Last run of Watch-MoveRequest completed at $lastruncompletion. Next run of Watch-MoveRequest occurs in $minutes at $nextrun" -ForegroundColor DarkYellow
-        }
-        Start-Sleep -Seconds 60
+        Watch-MoveRequest @WMRParams
+        $lastruncompletion = get-date
     }
-}
+    $timeremaining = $nextrun - $time
+    $minutes = $timeremaining.Minutes
+    $hours = $timeremaining.Hours
+    if (($Minutes % 15) -eq 0 -or ($minutes -le 5 -and $hours -eq 0))
+    {
+        Write-Log "Last run of Watch-MoveRequest completed at $lastruncompletion." -Verbose -EntryType Notification
+        Write-Log "Next run of Watch-MoveRequest occurs in $minutes at $nextrun" -Verbose -EntryType Notification
+    }
+    #if ($resumeautosuspended) {#Run Resume AutoSuspended Code}
+    #if ($resumefailed) {#Run Resume Failed Code}
+    #if ($CompletedMailboxConfiguration) {#Run Mailbox Configuration Code}
+    Start-Sleep -Seconds 60
+}#while
+}#function Watch-MRMMoveRequestContinuously
 #New/Experimental:
 function Start-MRMBackgroundWMRC {
 [cmdletbinding()]
