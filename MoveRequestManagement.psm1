@@ -531,6 +531,7 @@ param
     [string]$ExchangeOrganization
     ,
     $SourceData = $Script:sourcedata
+    #add convergence check into report data based on Source Data
 )
 [string]$Stamp = Get-TimeStamp
 switch ($wavetype) 
@@ -618,10 +619,11 @@ else
 #Send the Mail Notification
 if ($mailNotification -and $Script:mr.count -gt 0)
 {
+    #http://stackoverflow.com/questions/11035905/powershell-display-current-time-with-time-zone
     $TimeZone = [Regex]::Replace([System.TimeZoneInfo]::Local.StandardName, '([A-Z])\w+\s*', '$1')
     [string]$MessageTimeStamp = (Get-Date -Format 'yyyy-MM-dd HH:mm') + " $TimeZone"
     $sendmailparams = @{}
-    $sendmailparams.Subject = "Auto Generated Message: Wave $wave Mailbox Move Status Update as of $MessageTimeStamp"
+    $sendmailparams.Subject = "Auto Generated Message: Wave $wave Mailbox Move $Operation Status Report Update as of $MessageTimeStamp"
     #below needs to go in admin user profile or org profile
 	$Sendmailparams.From = $Sender
     $Sendmailparams.To = $Recipients
@@ -675,7 +677,7 @@ if ($wavetype -eq 'Full') {
     $Body = 
 @"
 <b>Wave $wave Mailbox Move $Operation Status Report.</b><br><br> 
-<b>Current Wave $wave $Operation Status is:$($Script:WaveMigrationMonitoring.$wave)</b><br><br> 
+<b>Current Wave $wave $Operation Status: $($Script:WaveMigrationMonitoring.$wave)</b><br><br>
 Immediately following is summary information, followed by more detail per mailbox move. <br>
 Attached in csv file format is status for each wave $wave mailbox move, current as of the generation of this message. <br><br> 
 <b>Status summary for all $wave mailbox moves:</b><br>
@@ -733,7 +735,7 @@ $CR
     Send-MailMessage @sendmailparams
     Write-Log -message "Monitoring E-mail Message Sent to recipients $($Recipients -join ';') " -Verbose 
 }
-}
+}#function Watch-MRMMoveRequest
 Function Watch-MRMMoveRequestContinuously {
     param(
     [parameter(Mandatory=$true)]
