@@ -330,9 +330,11 @@ $CountsMatch = ($WaveSourceData.count -eq $mr.Count)
         Write-Log -verbose -errorlog -Message "ERROR: Unable to Proceed with Move Request Completions for $wave because Migration Wave Tracking and Mailbox Move List Convergence Check FAILED" 
     }
 }
-function Get-MRMMoveRequestReport {
+function Get-MRMMoveRequestReport
+{
 [cmdletbinding()]
-param(
+param
+(
     [string]$Wave
     ,
     [parameter()]
@@ -353,7 +355,8 @@ param(
     ,
     [string]$ExchangeOrganization #convert to dynamic parameter later
 )
-Begin {
+Begin
+{
     function Get-MoveRequestForWave {
         switch ($WaveType) {
             'Full' {
@@ -378,7 +381,8 @@ Begin {
         $Script:qmr = @($mr | ? {$_.status -eq 'Queued'})
     }
 }
-Process {
+Process
+{
     switch ($operation) {
         'LargeItemReport' {
             Get-MoveRequestForWave
@@ -497,24 +501,21 @@ Process {
         }
     }
 }
-End {
+End
+{
     if ($passthru) {
         $Script:mr 
     }
 }
 }
-function Watch-MRMMoveRequest {
+function Watch-MRMMoveRequest 
+{
 [cmdletbinding()]
-param(
+param
+(
     [parameter()]
     [ValidateSet('Completion','Synchronization')]
     [string]$Operation
-    ,
-    [boolean]$ConfigureMailboxOptions
-    ,
-    [boolean]$ResumeAutosuspended
-    ,
-    [boolean]$ResumeFailed
     ,
     [parameter(Mandatory=$true)]
     [validateSet('Full','Sub')]
@@ -523,8 +524,6 @@ param(
     [parameter(Mandatory=$true)]
     [string]$wave
     ,
-    [boolean]$MailNotification = $true
-    ,
     [string[]]$Recipients
     ,
     [string]$Sender
@@ -532,27 +531,97 @@ param(
     [string]$ExchangeOrganization
     ,
     $SourceData = $Script:sourcedata
-    #,
-    #[switch]$SendUMWelcome
 )
 [string]$Stamp = Get-TimeStamp
-#$LogFileBaseName = ('MonitorMoveRequest.log')
-#$LogPath = $Script:LogFolderPath + $stamp + '-' + $wave + $LogFileBaseName
-#$ErrorLogPath = $Script:LogFolderPath + $stamp + '-' + $wave + '-ERRORS' + $LogFileBaseName
-if (-not (Test-Path 'variable:\WaveMigrationMonitoring')) {$Script:WaveMigrationMonitoring = @{}}
-if ($Script:WaveMigrationMonitoring.$wave -eq 'Complete') {$MailNotification = $false}
-switch ($wavetype) {
+switch ($wavetype) 
+{
     'Full' {$WaveSourceData = $SourceData | Where-Object {$_.Wave -match "\b$wave(\.\S*|\b)"}}
     'Sub' {$WaveSourceData = $SourceData | Where-Object {$_.wave -eq $wave}}
 }
-Write-Log -message "Getting Migration Wave $wave Move Request Data." -Verbose 
-Get-MRMMoveRequestReport -wave $wave -WaveType $wavetype -operation WaveMonitoring -statsoperation All -ExchangeOrganization $ExchangeOrganization
-Write-Log -message "Received Migration Wave $wave Move Request Data." -Verbose 
-if ($Script:ipmrs.count -lt 1) {$Script:WaveMigrationMonitoring.$wave = 'Complete'} else {$Script:WaveMigrationMonitoring.$wave = 'InProgress'; $MailNotification = $true} 
-if ($mailNotification -and $Script:mr.count -gt 0) {
-    [string]$MessageTimeStamp = (Get-Date -Format 'yyyy-MM-dd HH:mm') + ' Eastern'
+$message = "Get Migration Wave $wave Move Request Report."
+Write-Log -message $message -Verbose -EntryType Attempting
+Get-MRMMoveRequestReport -wave $wave -WaveType $wavetype -operation WaveMonitoring -statsoperation All -ExchangeOrganization $ExchangeOrganization -ErrorAction Stop
+Write-Log -message $message -Verbose -EntryType Succeeded 
+#check if the Wave Migration Monitoring Hash Table exists; if not, create it.  
+if (-not (Test-Path 'variable:\WaveMigrationMonitoring')) {$Script:WaveMigrationMonitoring = @{}}
+if (-not (Test-Path 'variable:\WaveMigrationOperationCompleted')){$script:WaveMigrationOperationCompleted = @{}}
+#check the Wave Migration Operation Status
+switch ($Operation)
+{
+    'Completion'
+    {
+        if ($Script:ipmrs.count -ge 1 -or $Script:qmr.Count -ge 1)
+        {
+            if ($Script:fmr.Count -ge 1)
+            {
+                $Script:WaveMigrationMonitoring.$wave = 'CompletionInProgressWithFailures'
+            }
+            else
+            {
+                $Script:WaveMigrationMonitoring.$wave = 'CompletionInProgress'
+            }
+            $script:WaveMigrationOperationCompleted.$wave = $false
+        }
+        else
+        {
+            if ($Script:fmr.Count -ge 1)
+            {
+                $Script:WaveMigrationMonitoring.$wave = 'CompletedWithFailures'
+            }
+            else
+            {
+                $Script:WaveMigrationMonitoring.$wave = 'Completed'
+            }
+        }
+    }
+    'Synchronization'
+    {
+        if ($Script:ipmrs.count -ge 1 -or $Script:qmr.Count -ge 1)
+        {
+            if ($Script:fmr.Count -ge 1)
+            {
+                $Script:WaveMigrationMonitoring.$wave = 'SynchronizationInProgressWithFailures'
+            }
+            else
+            {
+                $Script:WaveMigrationMonitoring.$wave = 'SynchronizationInProgress'
+            }
+            $script:WaveMigrationOperationCompleted.$wave = $false
+        }
+        else
+        {
+            if ($Script:fmr.Count -ge 1)
+            {
+                $Script:WaveMigrationMonitoring.$wave = 'SynchronizedWithFailures'
+            }
+            else
+            {
+                $Script:WaveMigrationMonitoring.$wave = 'Synchronized'
+            }
+        }
+    }
+}
+#if the wave operation is still in progress, send mail notification, otherwise, send mail notification 1 time for completed operation but not again.
+if ($Script:WaveMigrationMonitoring.$wave -like '*InProgress*')
+{
+    $MailNotification = $true
+}
+elseif ($script:WaveMigrationOperationCompleted.$wave -eq $false)
+{
+    $MailNotification = $true
+    $script:WaveMigrationOperationCompleted.$wave =  $true
+}
+else 
+{
+    $MailNotification = $false
+}
+#Send the Mail Notification
+if ($mailNotification -and $Script:mr.count -gt 0)
+{
+    $TimeZone = [Regex]::Replace([System.TimeZoneInfo]::Local.StandardName, '([A-Z])\w+\s*', '$1')
+    [string]$MessageTimeStamp = (Get-Date -Format 'yyyy-MM-dd HH:mm') + " $TimeZone"
     $sendmailparams = @{}
-    $sendmailparams.Subject = "Automatically Generated Message: Wave $wave Mailbox Move Status Update as of $MessageTimeStamp"
+    $sendmailparams.Subject = "Auto Generated Message: Wave $wave Mailbox Move Status Update as of $MessageTimeStamp"
     #below needs to go in admin user profile or org profile
 	$Sendmailparams.From = $Sender
     $Sendmailparams.To = $Recipients
@@ -560,6 +629,8 @@ if ($mailNotification -and $Script:mr.count -gt 0) {
     $sendmailparams.BodyAsHtml = $true
     $sendmailparams.Attachments = ($ExportDataPath + 'AllStatus.csv')
     #mail contents
+    #create the All Status attachment
+    $Script:mrs | Select-Object MailboxIdentity,DisplayName,Alias,@{n='Wave';e={$_.Batchname}},Status,StatusDetail,PercentComplete,CompletionTimestamp | Sort-Object DisplayName | Export-Csv -NoTypeInformation -Force -Path ($ExportDataPath + 'AllStatus.csv')
     #table css
     $css = 
 @"
@@ -588,9 +659,10 @@ table td {
 }
 </style>
 "@ 
+#region CreateHTMLContentTables
+    #Create the html content tables with the css applied    
     $IPR = $Script:ipmrs | Select-Object DisplayName,Alias,BatchName,PercentComplete,TotalMailboxSize,TotalMailboxItemCount,ItemsTransferred,Status,StatusDetail,RemoteHostName | Sort-Object PercentComplete | ConvertTo-Html -As Table -Head $css
     $IPSR = $Script:ipmrs | Select Status,StatusDetail | Group-Object StatusDetail | sort Name | Select @{n='Status Detail';e={$_.Name}},Count| ConvertTo-Html -as Table -Head $css
-    $Script:mrs | Select-Object MailboxIdentity,DisplayName,Alias,@{n='Wave';e={$_.Batchname}},Status,StatusDetail,PercentComplete,CompletionTimestamp | Sort-Object DisplayName | Export-Csv -NoTypeInformation -Force -Path ($ExportDataPath + 'AllStatus.csv')
     if ($Script:fmrs.count -ge 1)  {$FR = $Script:fmrs | Select-Object DisplayName,Alias,BatchName,Status,StatusDetail,FailureType,FailureSide,FailureTimestamp | Sort-Object DisplayName | ConvertTo-Html -as Table -Head $css}
     $CR = $Script:cmrs | Select-Object DisplayName,Alias,BatchName,PercentComplete,Status,StartTimeStamp,CompletionTimestamp | Sort-Object DisplayName | ConvertTo-Html -as Table -Head $css
 if ($wavetype -eq 'Full') {
@@ -598,9 +670,12 @@ if ($wavetype -eq 'Full') {
     $TMRwS = $Script:mr | Group-Object BatchName | sort Name | Select @{n='Sub Wave';e={$_.Name}},Count | ConvertTo-Html -As Table -Head $css
     $TMRSwS = $Script:mr | Group-Object BatchName,Status | sort Name | Select @{n='Sub Wave, Status';e={$_.Name}},Count| ConvertTo-Html -As Table -Head $css
 }
+#endregion CreateHTMLContentTables
+#region CreateHTMLMessageBody
     $Body = 
 @"
-<b>Wave $wave Mailbox Move $Operation has been Initiated.</b><br><br> 
+<b>Wave $wave Mailbox Move $Operation Status Report.</b><br><br> 
+<b>Current Wave $wave $Operation Status is:$($Script:WaveMigrationMonitoring.$wave)</b><br><br> 
 Immediately following is summary information, followed by more detail per mailbox move. <br>
 Attached in csv file format is status for each wave $wave mailbox move, current as of the generation of this message. <br><br> 
 <b>Status summary for all $wave mailbox moves:</b><br>
@@ -614,8 +689,10 @@ Failed: `t $($Script:fmr.count)<br><br>
 $IPSR
 <br><br>
 "@ 
-
-if ($wavetype -eq 'Full') {$body += 
+#Add more body for Full Waves to break out sub-waves
+if ($wavetype -eq 'Full') 
+{
+    $body +=
 @"
 <b>Total moves per Sub Wave:</b>
 $TMRwS
@@ -631,13 +708,17 @@ $IPSRwS
 <br><br>
 "@
 }
-if ($Script:fmrs.count -ge 1) {$body +=
+#Add more body for any failed move requests
+if ($Script:fmrs.count -ge 1) 
+{
+    $body +=
 @"
 <b>Failure details for currently Failed wave $wave mailbox moves:</b><br>
 $FR
 <br><br>
 "@ 
 }
+#Add final bit of body for in progress and completed details
 $body += 
 @"
 <b>Statistics for currently In Progress wave $wave  mailbox moves:</b><br>
@@ -647,79 +728,10 @@ $IPR
 $CR
 <br><br>
 "@ 
-
+#endregion CreateHTMLMessageBody
     $Sendmailparams.Body = $Body
     Send-MailMessage @sendmailparams
     Write-Log -message "Monitoring E-mail Message Sent to recipients $($Recipients -join ';') " -Verbose 
-}
-switch ($operation) {
-    'Completion' {
-        Write-Log -message "The active operation is $Operation" -Verbose 
-        if ($ConfigureMailboxOptions) {Configure-MailboxOptions -Wave $wave -wavetype $wavetype -operation ExchangePostMigration}
-        #resume any autosuspended requests
-        if ($ResumeAutosuspended) {
-            Write-Log -message "Attempting Resume Move Request for $($Script:asmr.count) Move Requests in Autosupsended state." -Verbose 
-            foreach ($request in $Script:asmr) {
-                Connect-Exchange -ExchangeOrganization $ExchangeOrganization
-                Try {
-                    Invoke-ExchangeCommand -ExchangeOrganization $ExchangeOrganization -cmdlet 'Resume-MoveRequest' -string "-Identity $($request.exchangeguid.guid)" 
-                    #Resume-OLMoveRequest -Identity $request.exchangeguid.guid
-                }
-                Catch {
-                    Write-Log -message "Error: Failed to Resume Move Request for $($request.displayname)." -Verbose -ErrorLog
-                    Write-Log -Message $_.tostring() -ErrorLog
-                    $_
-                }
-            }
-        }
-        #resume any failed requests
-        if ($ResumeFailed) {
-            Write-Log -message "Attempting Resume Move Request for $($Script:fmr.count) Move Requests in Failed state." -Verbose 
-            foreach ($request in $Script:fmr) {
-                Connect-Exchange -ExchangeOrganization $ExchangeOrganization
-                Try {
-                    Invoke-ExchangeCommand -ExchangeOrganization $ExchangeOrganization -cmdlet 'Resume-MoveRequest' -string "-Identity $($request.exchangeguid.guid)" 
-                }
-                Catch {
-                    Write-Log -Verbose -message "Error: Failed to Resume Move Request for $($request.displayname)." 
-                    Write-Log -Message $_.tostring() 
-                    $_
-                }
-            }
-        }
-    }
-    "Synchronization" {
-        Write-Log -message "The active operation is $Operation" -Verbose 
-        if ($ResumeAutosuspended) {
-            Write-Log -message "Attempting Resume Move Request for $($Script:asmr.count) Move Requests in Autosuspended state." -Verbose 
-            foreach ($request in $Script:asmr) {
-                Connect-Exchange -ExchangeOrganization $ExchangeOrganization
-                Try {
-                    Invoke-ExchangeCommand -ExchangeOrganization $ExchangeOrganization -cmdlet 'Resume-MoveRequest' -string "-Identity $($request.exchangeguid.guid)" 
-                }
-                Catch {
-                    Write-Log -message "Error: Failed to Resume Move Request for $($request.displayname)." -Verbose 
-                    Write-Log -Message $_.tostring() 
-                    $_
-                }
-            }
-        }
-        #resume any failed requests
-        if ($ResumeFailed) {
-            Write-Log -message "Attempting Resume Move Request for $($Script:fmr.count) Move Requests in Failed state." -Verbose 
-            foreach ($request in $Script:fmr) {
-                Connect-Exchange -ExchangeOrganization $ExchangeOrganization
-                Try {
-                    Invoke-ExchangeCommand -ExchangeOrganization $ExchangeOrganization -cmdlet 'Resume-MoveRequest' -string "-Identity $($request.exchangeguid.guid)" 
-                }
-                Catch {
-                    Write-Log -Verbose -message "Error: Failed to Resume Move Request for $($request.displayname)." 
-                    Write-Log -Message $_.tostring() 
-                    $_
-                }
-            }
-        }
-    }
 }
 }
 Function Watch-MRMMoveRequestContinuously {
