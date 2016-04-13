@@ -785,7 +785,7 @@ while ($True)
             Sender = $Sender
             Recipients = $Recipients
         }
-        Watch-MoveRequest @WMRParams
+        Watch-MRMMoveRequest @WMRParams
         $lastruncompletion = get-date
     }
     $timeremaining = $nextrun - $time
