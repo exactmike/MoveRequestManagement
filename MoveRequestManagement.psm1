@@ -179,7 +179,7 @@ $LogFileBaseName = ('_NewWaveBatchMoveRequest.log')
             Write-Log -Message $_.tostring() -ErrorLog  -ErrorLogPath $ErrorLogPath
         }
     }#ForEach
-}
+}#New-MRMMoveRequest
 function Set-MRMMoveRequestForCompletion
 {
 [cmdletbinding()]
@@ -235,7 +235,63 @@ param
             Write-Log -Message $_.tostring() -ErrorLog
         }
     }
-}
+}#Set-MRMMoveRequestForCompletion
+function Test-MRMTrackingListAndRequestConvergence
+{
+[cmdletbinding()]
+param
+(
+[parameter(Mandatory = $True)]
+[string]$wave
+,
+[parameter(Mandatory = $True)]
+[ValidateSet('Full','Sub')]
+[string]$wavetype
+,
+[switch]$includeBadADLookupStatus
+,
+[string]$ExchangeOrganization
+)
+$SourceData = $Script:SourceData
+switch ($wavetype) 
+{
+    'Full' 
+    {
+            if ($includeBadADLookupStatus) {
+                $WaveData = $SourceData | Where-Object {$_.Wave -like "$wave*"}
+            }
+            else {$WaveData = $SourceData | Where-Object {$_.Wave -like "$wave*" -and $_.ADStatus -notin ("Missing","NonUser","Ambiguous")}}
+    }#'Full'
+    'Sub' 
+    {
+            if ($includeBadADLookupStatus) {
+                $WaveData = $SourceData | Where-Object {$_.Wave -match "\b$wave(\.\S*|\b)"}
+            }
+            else {$WaveData = $SourceData | Where-Object {$_.Wave -match "\b$wave(\.\S*|\b)" -and $_.ADStatus -notin ("Missing","NonUser","Ambiguous")}}
+    }#'Sub'
+}#switch
+#check for convergence of Move Requests and Wave Tracking
+Get-MRMMoveRequestReport -Wave $wave -WaveType $wavetype -operation WaveMonitoring -ExchangeOrganization $ExchangeOrganization
+$mraliases = @($Script:mr | select-object -ExpandProperty Alias)
+$wtaliases = @($WaveSourceData | Select-Object -ExpandProperty Alias) 
+$unexpectedMR = @($mraliases | where-object {$_ -notin $wtaliases})
+$missingMR = @($wtaliases | where-object {$_ -notin $mraliases})
+$CountsMatch = ($WaveSourceData.count -eq $mr.Count)
+If ($CountsMatch -and $unexpectedMR.count -eq 0 -and $missingMR.count -eq 0) 
+{
+    Write-Log -Message "Migration Wave Tracking and Mailbox Move List Convergence Check PASSED" -Verbose
+    $true
+}#If
+Else 
+{
+    Write-Log -Verbose -errorlog -Message "ERROR: Migration Wave Tracking and Mailbox Move List Convergence Check FAILED" 
+    Write-Log "Move Request Alias Count: $($mraliases.count )" -Verbose -ErrorLog
+    Write-Log "Tracking data Alias Count: $($wtaliases.count)" -Verbose -ErrorLog
+    Write-Log "Unexpected Move Requests: $($unexpectedMR -join ',')" -Verbose -ErrorLog
+    Write-Log "Missing Move Requests: $($missingMR -join ',')" -Verbose -ErrorLog
+    $false
+}#Else
+}#function Test-MRMTrackingListAndRequestConvergence
 function Start-MRMMoveRequestCompletion
 {
 [cmdletbinding()]
@@ -250,13 +306,15 @@ param
     ,
     [string]$LogFileBasePath = '-MoveRequestCompletion.log'
     ,
-    [string]$MigrationBlockListFilePath
+    [string[]]$MigrationBlockList
     , 
     [string]$ExchangeOrganization #convert to dynamic parameter 
     ,
     $SourceData = $Script:SourceData
     ,
     [switch]$ByPassConvergenceCheck
+    ,
+    [switch]$IncludeBadADLookkupStatusInConvergenceCheck
 
 )
 [string]$stamp = Get-Date -Format yyyyMMdd_hhmm
@@ -267,68 +325,51 @@ switch ($wavetype)
         'Full' {$WaveSourceData = $SourceData | Where-Object {$_.Wave -match "\b$wave(\.\S*|\b)"}}
         'Sub' {$WaveSourceData = $SourceData | Where-Object {$_.wave -eq $wave}}
 }
-if ($MigrationBlockListFilePath) 
+#check for convergence of Move Requests and Wave Tracking
+if ($ByPassConvergenceCheck) 
 {
-    Try
-    {
-            $MigrationBlockList = Import-Csv $MigrationBlockListFilePath -ErrorAction Stop
-            $MigrationBlockListPSMTP = $MigrationBlockList | select-object -ExpandProperty PrimarySmtpAddress
-    }
-    Catch
-    {
-            $proceed = $false
-            $_
-    }
+    Write-Log -Message "WARNING:Migration Tracking Database and Move Request Convergence for $Wave has been bypassed." -EntryType Notification -Verbose
+    $proceed = $true
 }
-
-    #check for convergence of Move Requests and Wave Tracking
-Get-MRMMoveRequestReport -Wave $wave -WaveType $wavetype -operation WaveMonitoring -ExchangeOrganization $ExchangeOrganization
-$mraliases = @($Script:mr | select-object -ExpandProperty Alias)
-$wtaliases = @($WaveSourceData | Select-Object -ExpandProperty Alias) #PrimarySmtpAddress | Get-OPRecipient | Select-Object -ExpandProperty Alias
-$unexpectedMR = @($mraliases | where-object {$_ -notin $wtaliases})
-$missingMR = @($wtaliases | where-object {$_ -notin $mraliases})
-$CountsMatch = ($WaveSourceData.count -eq $mr.Count)
-    IF ($CountsMatch -and $unexpectedMR.count -eq 0 -and $missingMR.count -eq 0) {
-        $proceed = $true
-        Write-Log -Message "Migration Wave Tracking and Mailbox Move List Convergence Check PASSED" -Verbose
+else {
+    $TestConvergenceParams =
+    @{
+        Wave = $wave
+        WaveType = $wavetype
+        ExchangeOrganization = $ExchangeOrganization
+        IncludeBadADLookupStatus = $IncludeBadADLookkupStatusInConvergenceCheck
     }
-    Else {
-        if ($ByPassConvergenceCheck) {$proceed = $true} else {$proceed = $false}
-        Write-Log -Verbose -errorlog -Message "ERROR: Migration Wave Tracking and Mailbox Move List Convergence Check FAILED" 
-        Write-Log "Move Request Alias Count: $($mraliases.count )" -Verbose -ErrorLog
-        Write-Log "Tracking data Alias Count: $($wtaliases.count)" -Verbose -ErrorLog
-        Write-Log "Unexpected Move Requests: $($unexpectedMR -join ',')" -Verbose -ErrorLog
-        Write-Log "Missing Move Requests: $($missingMR -join ',')" -Verbose -ErrorLog
-    }
-
-    if ($proceed) {
-        $b = 0
-        $RecordCount = $Script:mr.count
-        foreach ($request in $WaveSourceData) {
-            $b++
-            Write-Progress -Activity "Processing move request resume for completion for all $wave move requests." -Status "Processing $($Request.PrimarySMTPAddress), record $b of $RecordCount." -PercentComplete ($b/$RecordCount*100)
-            If ($request.PrimarySmtpAddress -notin $MigrationBlockListPSMTP) {
-                Connect-Exchange -ExchangeOrganization $ExchangeOrganization
-                Try {
-                    $logstring = "Resume Move Request $($Request.PrimarySMTPAddress)"
-                    Write-Log -Message $logstring -Verbose -EntryType Attempting
-                    Resume-OLMoveRequest -Identity $request.PrimarySmtpAddress -ErrorAction Stop
-                    Write-Log -Message $logstring -Verbose -EntryType Succeeded
-                }
-                Catch {
-                    Write-Log -verbose -errorlog -Message $logstring -EntryType Failed
-                    Write-Log -Message $_.tostring() -ErrorLog 
-                }
+    $proceed = Test-MRMTrackingListAndRequestConvergence @TestConvergenceParams
+}
+#If Convergence checks out or Bypass Convergence was chosen, proceed with move request completions.  
+if ($proceed) {
+    $b = 0
+    $RecordCount = $Script:mr.count
+    foreach ($request in $WaveSourceData) {
+        $b++
+        Write-Progress -Activity "Processing move request resume for completion for all $wave move requests." -Status "Processing $($Request.PrimarySMTPAddress), record $b of $RecordCount." -PercentComplete ($b/$RecordCount*100)
+        If ($request.PrimarySmtpAddress -notin $MigrationBlockListPSMTP) {
+            Connect-Exchange -ExchangeOrganization $ExchangeOrganization
+            Try {
+                $logstring = "Resume Move Request $($Request.PrimarySMTPAddress)"
+                Write-Log -Message $logstring -Verbose -EntryType Attempting
+                Resume-OLMoveRequest -Identity $request.PrimarySmtpAddress -ErrorAction Stop
+                Write-Log -Message $logstring -Verbose -EntryType Succeeded
             }
-            Else {
-                Write-Log -verbose -errorlog -Message "SKIPPED: Move Request $($Request.PrimarySmtpAddress) Found in Migration Block List." 
+            Catch {
+                Write-Log -verbose -errorlog -Message $logstring -EntryType Failed
+                Write-Log -Message $_.tostring() -ErrorLog 
             }
         }
-    }
-    else {
-        Write-Log -verbose -errorlog -Message "ERROR: Unable to Proceed with Move Request Completions for $wave because Migration Wave Tracking and Mailbox Move List Convergence Check FAILED" 
+        Else {
+            Write-Log -verbose -errorlog -Message "SKIPPED: Move Request $($Request.PrimarySmtpAddress) Found in Migration Block List." 
+        }
     }
 }
+else {
+    Write-Log -verbose -errorlog -Message "ERROR: Unable to Proceed with Move Request Completions for $wave because Migration Wave Tracking and Mailbox Move List Convergence Check FAILED" 
+}
+}#function Start-MRMMoveRequestCompletion
 function Get-MRMMoveRequestReport
 {
 [cmdletbinding()]
@@ -506,7 +547,7 @@ End
         $Script:mr 
     }
 }
-}
+}#function Get-MRMMoveRequestReport
 function Watch-MRMMoveRequest 
 {
 [cmdletbinding()]
@@ -808,6 +849,71 @@ while ($True)
     Start-Sleep -Seconds 60
 }#while
 }#function Watch-MRMMoveRequestContinuously
+function Get-MRMNonDeletedLargeItemReport
+{
+[cmdletbinding()]
+param
+(
+    [string]$Wave
+    ,[datetime]$FailedSince
+    ,[switch]$SendMail
+    ,[string]$ExchangeOrganization
+    ,$MailNotificationSender
+    ,$SMTPServer = $CurrentOrgProfile.general.MailRelayServerFQDN
+    ,[string[]]$ToRecipients
+    ,[string[]]$CCRecipients
+)
+[string]$Stamp = Get-Date -Format yyyyMMdd_HHmm
+[string]$LargeItemReportFile = $trackingfolder + $Stamp + '_' + $wave + '_' + 'LargeItemReport.csv'
+$LIReports = @()
+#hash table for parameters for Get-MoveRequestReportData
+$GetMRRD = @{}
+$GetMRRD.Wave = $Wave
+$GetMRRD.WaveType = 'Full'
+$GetMRRD.Operation = 'LargeItemReport'
+$GetMRRD.ExchangeOrganization = $ExchangeOrganization
+if ($failedsince) {$GetMRRD.FailedSince = $FailedSince}
+Get-MRMMoveRequestReport @GetMRRD
+foreach ($request in $Script:lifmrs)
+{
+    $DisplayName = $($request.MailboxIdentity.Rdn.UnescapedName)
+    $FailureTimeStamp = $($request.FailureTimeStamp)
+    $QualifiedLargeItems = @(
+        $request.LargeItemList | ? {$_.WellKnownFolderType.tostring() -ne 'DumpsterDeletions'} | 
+        foreach-object {"Subject: $($_.Subject); Folder: $($_.FolderName); Date: $($_.DateReceived); Sender: $($_.Sender); Recipient: $($_.Recipient); Size: $($_.MessageSize/1MB -as [int])MB"}
+    )
+    $LItemsNotDeletedList = $QualifiedLargeItems -join "`r`n"
+    $QualifiedLargeItemCount = $QualifiedLargeItems.count
+    If ($QualifiedLargeItemCount -gt 0) {
+        Connect-Exchange -ExchangeOrganization $ExchangeOrganization
+        $OLRecipientPrimarySmtpAddress = Get-OLRecipient -Identity $DisplayName | Select-Object -ExpandProperty PrimarySmtpAddress
+        $LIReport = New-Object -TypeName PSObject -Property @{DisplayName = $DisplayName; PrimarySmtpAddress = $OLRecipientPrimarySmtpAddress; LargeOrBadItemCount = $QualifiedLargeItemCount; LargeOrBadItemList = $LItemsNotDeletedList; FailureTimeStamp = $FailureTimeStamp}
+        $LIReports += $LIReport | Select-Object DisplayName,PrimarySmtpAddress,LargeOrBadItemCount,LargeOrBadItemList,FailureTimeStamp
+    }
+} 
+if ($LIReports.count -gt 0)
+{
+    $LIReports | Export-Csv -NoTypeInformation -Path $LargeItemReportFile -Append
+    if ($SendMail)
+    {
+        Start-Sleep -Seconds 5
+        $sendmailparams = @{}
+        $sendmailparams.Cc = $CCRecipients
+        $sendmailparams.To = $ToRecipients
+        $sendmailparams.Attachments = $LargeItemReportFile
+        $sendmailparams.From = $MailNotificationSender
+        $sendmailparams.Subject = "Large Item Report for Wave $Wave"
+        $Sendmailparams.SmtpServer = $SMTPServer
+        $sendmailparams.body = @"
+Please find attached the Large Item Report File for wave $wave.
+
+Mike Campbell, Senior Consultant
+o:312-589-2080  m:864-233-6174 | mike.campbell@perficient.com
+"@
+        Send-MailMessage @sendmailparams
+    }#If $sendmail
+}#If $LIReports.count -gt 0
+}#function Get-MRMNonDeletedLargeItemReport
 #New/Experimental:
 function Start-MRMBackgroundWMRC 
 {
@@ -854,139 +960,6 @@ $startcomplexjobparams=
         Watch-MoveRequestContinuously @WMRCParams
     }#script
 }#startcomplexjobparams
-}
-#not yet updated
-function Get-MRMTrackingAndRequestConvergenceStatus {
-[cmdletbinding()]
-param(
-[parameter(Mandatory = $True)]
-[string]$wave
-,
-[parameter(Mandatory = $True)]
-[ValidateSet('Full','Sub')]
-[string]$wavetype
-,[string]$LogFileBasePath = '_WaveBatchTrackingAndRequestConvergenceStatus.log'
-,[switch]$includeBadADLookupStatus
-,[string]$ExchangeOrganization
-)
-
-    [string]$stamp = Get-Date -Format yyyyMMdd_hhmm
-    [string]$LogPath = ($trackingfolder + $stamp + '_' + $wave + $LogFileBasePath)
-    [string]$ErrorLogPath = ($trackingfolder + $stamp + '_ERRORS_' + $wave + $LogFileBasePath)
-    $SourceData = $Script:SourceData
-    switch ($wavetype) {
-        'Full' {
-            if ($includeBadADLookupStatus) {
-                $WaveData = $SourceData | Where-Object {$_.Wave -like "$wave*"}
-            }
-            else {$WaveData = $SourceData | Where-Object {$_.Wave -like "$wave*" -and $_.EKCStatus -notin ("Missing","NonUser","Ambiguous")}}
-            }
-        'Sub' {
-            if ($includeBadADLookupStatus) {
-                $WaveData = $SourceData | Where-Object {$_.Wave -match "\b$wave(\.\S*|\b)"}
-            }
-            else {$WaveData = $SourceData | Where-Object {$_.Wave -match "\b$wave(\.\S*|\b)" -and $_.EKCStatus -notin ("Missing","NonUser","Ambiguous")}}
-            }
-    }
-    
-    #check for convergence of Move Requests and Wave Tracking
-    Get-MRMMoveRequestReport -Wave $wave -WaveType $wavetype -operation WaveMonitoring -ExchangeOrganization $exchangeOrganization
-    $mraliases = $Script:mr | select-object -ExpandProperty Alias
-    $wtaliases = $WaveData | ForEach-Object {switch ($psitem.sourcesystem) { 'Creo' {$psitem.CreMailNickname} 'KPG' {$psitem.KPGMailNickname}}}
-    $unexpectedMR = @($mraliases | where-object {$_ -notin $wtaliases})
-    $missingMR = @($wtaliases | where-object {$_ -notin $mraliases})
-    $CountsMatch = ($WaveData.count -eq $mr.Count)
-    IF ($CountsMatch -and $unexpectedMR.count -eq 0 -and $missingMR.count -eq 0) {
-        $proceed = $true
-        Write-Log -Message "Migration Wave Tracking and Mailbox Move List Convergence Check PASSED" -Verbose
-        Write-Output "Batchname $Wave Move Request Count is $($mr.count)."
-        Write-Output "Tracking List $Wave Record Count is $($WaveData.count)."
-
-    }
-    Else {
-        $proceed = $false
-        Write-Log -Message "ERROR: Migration Wave Tracking and Mailbox Move List Convergence Check FAILED" -Verbose -ErrorLog
-        Write-Output "Batchname $Wave Move Request Count is $($mr.count)."
-        Write-Output "Tracking List $Wave Record Count is $($WaveData.count)."
-        if ($unexpectedMR.count -gt 0) {
-            Write-Output "Unexpected Move Requests in Mailbox Move Request Batchname $wave :"
-            Write-Output $unexpectedMR
-        }
-        if ($missingMR.count -gt 0) {
-            Write-Output "Missing Move Requests in Mailbox Move Request Batchname $wave :"
-            Write-Output $missingMR
-        }
-        
-    }
-}
-function Get-MRMNonDeletedLargeItemReport {
-[cmdletbinding()]
-param(
-    [string]$Wave
-    ,[datetime]$FailedSince
-    ,[switch]$SendMail
-    ,[string]$ExchangeOrganization
-    ,$MailNotificationSender
-    ,$SMTPServer = $CurrentOrgProfile.general.MailRelayServerFQDN
-    ,[string[]]$ToRecipients
-    ,[string[]]$CCRecipients
-)
-
-[string]$Stamp = Get-Date -Format yyyyMMdd_HHmm
-[string]$LargeItemReportFile = $trackingfolder + $Stamp + '_' + $wave + '_' + 'LargeItemReport.csv'
-$LIReports = @()
-    
-#hash table for parameters for Get-MoveRequestReportData
-$GetMRRD = @{}
-$GetMRRD.Wave = $Wave
-$GetMRRD.WaveType = 'Full'
-$GetMRRD.Operation = 'LargeItemReport'
-$GetMRRD.ExchangeOrganization = $ExchangeOrganization
-if ($failedsince) {$GetMRRD.FailedSince = $FailedSince}
-
-
-Get-MRMMoveRequestReport @GetMRRD
-
-foreach ($request in $Script:lifmrs) {
-    $DisplayName = $($request.MailboxIdentity.Rdn.UnescapedName)
-    $FailureTimeStamp = $($request.FailureTimeStamp)
-    $QualifiedLargeItems = @(
-        $request.LargeItemList | ? {$_.WellKnownFolderType.tostring() -ne 'DumpsterDeletions'} | 
-        foreach-object {"Subject: $($_.Subject); Folder: $($_.FolderName); Date: $($_.DateReceived); Sender: $($_.Sender); Recipient: $($_.Recipient); Size: $($_.MessageSize/1MB -as [int])MB"}
-    )
-    $LItemsNotDeletedList = $QualifiedLargeItems -join "`r`n"
-    $QualifiedLargeItemCount = $QualifiedLargeItems.count
-    If ($QualifiedLargeItemCount -gt 0) {
-        Connect-Exchange -ExchangeOrganization $ExchangeOrganization
-        $OLRecipientPrimarySmtpAddress = Get-OLRecipient -Identity $DisplayName | Select-Object -ExpandProperty PrimarySmtpAddress
-        $LIReport = New-Object -TypeName PSObject -Property @{DisplayName = $DisplayName; PrimarySmtpAddress = $OLRecipientPrimarySmtpAddress; LargeOrBadItemCount = $QualifiedLargeItemCount; LargeOrBadItemList = $LItemsNotDeletedList; FailureTimeStamp = $FailureTimeStamp}
-        $LIReports += $LIReport | Select-Object DisplayName,PrimarySmtpAddress,LargeOrBadItemCount,LargeOrBadItemList,FailureTimeStamp
-    }
-} 
-
-if ($LIReports.count -gt 0) {
-    $LIReports | Export-Csv -NoTypeInformation -Path $LargeItemReportFile -Append
-
-    if ($SendMail) {
-        Start-Sleep -Seconds 5
-
-        $sendmailparams = @{}
-        $sendmailparams.Cc = $CCRecipients
-        $sendmailparams.To = $ToRecipients
-        $sendmailparams.Attachments = $LargeItemReportFile
-        $sendmailparams.From = $MailNotificationSender
-        $sendmailparams.Subject = "Large Item Report for Wave $Wave"
-        $Sendmailparams.SmtpServer = $SMTPServer
-        $sendmailparams.body = @"
-David:  Please find attached the Large Item Report File for wave $wave.
-
-Mike Campbell, Senior Consultant
-o:312-589-2080  m:864-233-6174 | mike.campbell@perficient.com
-"@
-
-    Send-MailMessage @sendmailparams
-    }
-}
 }
 ###################################################################################################
 #pre/post migration configuration functions
