@@ -556,7 +556,7 @@ switch ($Operation)
 {
     'Completion'
     {
-        if ($Script:ipmrs.count -ge 1 -or $Script:qmr.Count -ge 1)
+        if ($Script:ipmrs.count -ge 1 -or $Script:qmr.Count -ge 1 -or $Script:asmr.Count -ge 1)
         {
             if ($Script:fmr.Count -ge 1)
             {
