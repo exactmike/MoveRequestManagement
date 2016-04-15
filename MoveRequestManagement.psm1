@@ -86,7 +86,7 @@ $LogFileBaseName = ('_NewWaveBatchMoveRequest.log')
         'Sub' {$WaveData = @($SourceData | Where-Object {$_.Wave -eq $wave})} #-and $_.RecipientStatus -notin ("Missing","Duplicate")})}
     }
     #refresh MR data for batch
-    Get-MoveRequestReportData -Wave $wave -WaveType $wavetype -operation WaveMonitoring -ExchangeOrganization $ExchangeOrganization    
+    Get-MRMMoveRequestReport -Wave $wave -WaveType $wavetype -operation WaveMonitoring -ExchangeOrganization $ExchangeOrganization    
     #Common Move Request Parameters
     $MRParams = @{
         TargetDeliveryDomain = $CurrentOrgProfile.Office365Tenants.TargetDomain
@@ -205,7 +205,7 @@ param
     [string]$LogPath = ($trackingfolder + $stamp + '-' + $wave + $LogFileBasePath)
     [string]$ErrorLogPath = ($trackingfolder + $stamp + '-ERRORS-' + $wave + $LogFileBasePath)
     Write-Log -Message "Getting Move Request Data for Wave $Wave." -Verbose 
-    Get-MoveRequestReportData -Wave $wave -WaveType $wavetype -operation WaveMonitoring -ExchangeOrganization $ExchangeOrganization
+    Get-MRMMoveRequestReport -Wave $wave -WaveType $wavetype -operation WaveMonitoring -ExchangeOrganization $ExchangeOrganization
     if ($FailedOnly) {$ToProcess = $Script:fmr}
     else {$ToProcess = $Script:mr}
     #build parameter hash table
@@ -890,7 +890,7 @@ param(
     }
     
     #check for convergence of Move Requests and Wave Tracking
-    Get-MoveRequestReportData -Wave $wave -WaveType $wavetype -operation WaveMonitoring -ExchangeOrganization $exchangeOrganization
+    Get-MRMMoveRequestReport -Wave $wave -WaveType $wavetype -operation WaveMonitoring -ExchangeOrganization $exchangeOrganization
     $mraliases = $Script:mr | select-object -ExpandProperty Alias
     $wtaliases = $WaveData | ForEach-Object {switch ($psitem.sourcesystem) { 'Creo' {$psitem.CreMailNickname} 'KPG' {$psitem.KPGMailNickname}}}
     $unexpectedMR = @($mraliases | where-object {$_ -notin $wtaliases})
@@ -945,7 +945,7 @@ $GetMRRD.ExchangeOrganization = $ExchangeOrganization
 if ($failedsince) {$GetMRRD.FailedSince = $FailedSince}
 
 
-Get-MoveRequestReportData @GetMRRD
+Get-MRMMoveRequestReport @GetMRRD
 
 foreach ($request in $Script:lifmrs) {
     $DisplayName = $($request.MailboxIdentity.Rdn.UnescapedName)
