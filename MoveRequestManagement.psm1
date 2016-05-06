@@ -78,8 +78,11 @@ $LogFileBaseName = ('_NewWaveBatchMoveRequest.log')
 [string]$ExchangeOrganization #make this a dynamic parameter later
 )
     [string]$Stamp = Get-Date -Format yyyyMMdd-HHmm
-    $LogPath = $Script:LogFolderPath + $stamp + '-' + $wave + $LogFileBaseName
-    $ErrorLogPath = $Script:LogFolderPath + $stamp + '-' + $wave + '-ERRORS' + $LogFileBaseName
+    #$LogPath = $Script:LogFolderPath + $stamp + '-' + $wave + $LogFileBaseName
+    #$ErrorLogPath = $Script:LogFolderPath + $stamp + '-' + $wave + '-ERRORS' + $LogFileBaseName
+    #Get Endpoints and Credential Data from OneShell
+    $CurrentOrgAdminProfileSystems = Get-OneShellVariableValue -Name CurrentOrgAdminProfileSystems
+    $CurrentOrgProfile = Get-OneShellVariableValue -Name CurrentOrgProfile
     switch ($wavetype) 
     {
         'Full' {$WaveData = @($SourceData | Where-Object {$_.Wave -match "\b$wave(\.\S*|\b)"})} #-and $_.RecipientStatus -notin ("Missing","Duplicate")})}
