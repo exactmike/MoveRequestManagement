@@ -55,8 +55,8 @@ param
 (
 $SourceData = $Script:sourcedata
 ,
-$LogFileBaseName = ('_NewWaveBatchMoveRequest.log')
-,
+#$LogFileBaseName = ('_NewWaveBatchMoveRequest.log')
+#,
 [parameter(Mandatory=$True)]
 [string]$wave
 ,
@@ -78,18 +78,19 @@ $LogFileBaseName = ('_NewWaveBatchMoveRequest.log')
 [string]$ExchangeOrganization #make this a dynamic parameter later
 )
     [string]$Stamp = Get-Date -Format yyyyMMdd-HHmm
-    $LogPath = $Script:LogFolderPath + $stamp + '-' + $wave + $LogFileBaseName
-    $ErrorLogPath = $Script:LogFolderPath + $stamp + '-' + $wave + '-ERRORS' + $LogFileBaseName
+    #$LogPath = $Script:LogFolderPath + $stamp + '-' + $wave + $LogFileBaseName
+    #$ErrorLogPath = $Script:LogFolderPath + $stamp + '-' + $wave + '-ERRORS' + $LogFileBaseName
     switch ($wavetype) 
     {
         'Full' {$WaveData = @($SourceData | Where-Object {$_.Wave -match "\b$wave(\.\S*|\b)"})} #-and $_.RecipientStatus -notin ("Missing","Duplicate")})}
         'Sub' {$WaveData = @($SourceData | Where-Object {$_.Wave -eq $wave})} #-and $_.RecipientStatus -notin ("Missing","Duplicate")})}
     }
     #refresh MR data for batch
-    Get-MRMMoveRequestReport -Wave $wave -WaveType $wavetype -operation WaveMonitoring -ExchangeOrganization $ExchangeOrganization    
+    Get-MRMMoveRequestReport -Wave $wave -WaveType $wavetype -operation WaveMonitoring -ExchangeOrganization $ExchangeOrganization
+    $CurrentOrgProfile = Get-OneShellVariableValue -Name CurrentOrgProfile     
     #Common Move Request Parameters
     $MRParams = @{
-        TargetDeliveryDomain = $CurrentOrgProfile.Office365Tenants.TargetDomain
+        TargetDeliveryDomain = $CurrentOrgProfile.Office365Tenants[0].TargetDomain #need to fix logic in case there is more than one tenant
         Remote = $true
         LargeItemLimit = $LargeItemLimit
         BadItemLimit = $BadItemLimit
@@ -104,6 +105,7 @@ $LogFileBaseName = ('_NewWaveBatchMoveRequest.log')
     $mraliases = ($Script:mr | Select-Object -expandproperty alias)
     $b = 0
     $RecordCount = $WaveData.Count
+    $CurrentOrgAdminProfileSystems = Get-OneShellVariableValue -Name CurrentOrgAdminProfileSystems
     Write-Log -Message "Found $RecordCount entries for $Wave in Source Data." -EntryType Notification -Verbose
     ForEach ($R in $WaveData) { 
         $b++
@@ -962,7 +964,7 @@ $startcomplexjobparams=
 }#startcomplexjobparams
 }
 ###################################################################################################
-#pre/post migration configuration functions
+#pre/post migration configuration functions - Under Development
 ###################################################################################################
 function Set-MRMMailboxConfigurationOptions {
 [cmdletbinding()]
