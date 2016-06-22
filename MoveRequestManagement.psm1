@@ -678,7 +678,7 @@ if ($mailNotification -and $Script:mr.count -gt 0)
     #below needs to go in admin user profile or org profile
 	$Sendmailparams.From = $Sender
     $Sendmailparams.To = $Recipients
-    $Sendmailparams.SmtpServer = $CurrentOrgProfile.general.mailrelayserverFQDN
+    $Sendmailparams.SmtpServer = (Get-OneShellVariableValue -Name CurrentOrgProfile).general.mailrelayserverFQDN
     $sendmailparams.BodyAsHtml = $true
     $sendmailparams.Attachments = ($ExportDataPath + 'AllStatus.csv')
     #mail contents
