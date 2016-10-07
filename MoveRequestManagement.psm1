@@ -527,7 +527,6 @@ Process
                 $b++
                 Write-Progress -Activity $logstring -Status "Processing Record $b of $RecordCount." -PercentComplete ($b/$RecordCount*100)
                 Connect-Exchange -ExchangeOrganization $ExchangeOrganization
-                $
                 $Script:fmrs += Invoke-ExchangeCommand -cmdlet Get-MoveRequestStatistics -string "-Identity $($request.exchangeguid)" -ExchangeOrganization $ExchangeOrganization
             }
         }
