@@ -50,7 +50,7 @@ param
 ###################################################################################################
 Function New-MRMMoveRequest
 {
-[cmdletbinding()]
+[cmdletbinding(SupportsShouldProcess)]
 param
 (
 $SourceData = $Script:sourcedata
@@ -75,7 +75,7 @@ $SourceData = $Script:sourcedata
 [bool]$Suspend = $False
 ,
 [parameter(Mandatory=$true)]
-[string]$ExchangeOrganization #make this a dynamic parameter later
+[string]$ExchangeOrganization #Target Exchange Organization or Online if doing offboarding back to on premises
 )
     [string]$Stamp = Get-Date -Format yyyyMMdd-HHmm
     #$LogPath = $Script:LogFolderPath + $stamp + '-' + $wave + $LogFileBaseName
@@ -98,7 +98,7 @@ $SourceData = $Script:sourcedata
         LargeItemLimit = $LargeItemLimit
         BadItemLimit = $BadItemLimit
         SuspendWhenReadyToComplete = $SuspendWhenReadyToComplete
-		Suspend = $Suspend
+		    Suspend = $Suspend
         WarningAction = 'SilentlyContinue'
         ErrorAction = 'Stop'
         #consider adding parameters and values for CompleteAfter, ArchiveOnly, PrimaryOnly
