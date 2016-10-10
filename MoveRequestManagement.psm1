@@ -255,9 +255,12 @@ param
 ,
 [switch]$includeBadADLookupStatus
 ,
+[parameter(Mandatory)]
+$SourceData
+,
 [string]$ExchangeOrganization
 )
-$SourceData = $Script:SourceData
+
 switch ($wavetype) 
 {
     'Full' 
@@ -439,7 +442,7 @@ Process
             foreach ($request in $fmr) {
                 $b++
                 Write-Progress -Activity $logstring -Status "Processing Record $b of $RecordCount." -PercentComplete ($b/$RecordCount*100)
-                Connect-Exchange -ExchangeOrganization $ExchangeOrganization
+                Connect-Exchange -ExchangeOrganization $ExchangeOrganization > $null
                 $Script:fmrs += Invoke-ExchangeCommand -cmdlet Get-MoveRequestStatistics -string "Identity $($request.exchangeguid)"
             }
             if ($failedsince) {
@@ -458,7 +461,7 @@ Process
             foreach ($request in $slifmrs) {
                 $b++
                 Write-Progress -Activity "Getting move request statistics for all large item failed $wave move requests." -Status "Processing Record $b  of $RecordCount." -PercentComplete ($b/$RecordCount*100)
-                Connect-Exchange -ExchangeOrganization $ExchangeOrganization
+                Connect-Exchange -ExchangeOrganization $ExchangeOrganization > $null
                 $Script:lifmrs += $request | ForEach-Object {Invoke-ExchangeCommand -cmdlet Get-MoveRequestStatistics -string "-Identity $($_.alias) -IncludeReport" -ExchangeOrganization $ExchangeOrganization} | Select-Object -Property Alias,AllowLargeItems,ArchiveDomain,ArchiveGuid,BadItemLimit,BadItemsEncountered,BatchName,BytesTransferred,BytesTransferredPerMinute,CompleteAfter,CompletedRequestAgeLimit,CompletionTimestamp,DiagnosticInfo,Direction,DisplayName,DistinguishedName,DoNotPreserveMailboxSignature,ExchangeGuid,FailureCode,FailureSide,FailureTimestamp,FailureType,FinalSyncTimestamp,Flags,Identity,IgnoreRuleLimitErrors,InitialSeedingCompletedTimestamp,InternalFlags,IsOffline,IsValid,ItemsTransferred,LargeItemLimit,LargeItemsEncountered,LastUpdateTimestamp,MailboxIdentity,Message,MRSServerName,OverallDuration,PercentComplete,PositionInQueue,Priority,Protect,QueuedTimestamp,RecipientTypeDetails,RemoteArchiveDatabaseGuid,RemoteArchiveDatabaseName,RemoteCredentialUsername,RemoteDatabaseGuid,RemoteDatabaseName,RemoteGlobalCatalog,RemoteHostName,SourceArchiveDatabase,SourceArchiveServer,SourceArchiveVersion,SourceDatabase,SourceServer,SourceVersion,StartAfter,StartTimestamp,Status,StatusDetail,Suspend,SuspendedTimestamp,SuspendWhenReadyToComplete,SyncStage,TargetArchiveDatabase,TargetArchiveServer,TargetArchiveVersion,TargetDatabase,TargetDeliveryDomain,TargetServer,TargetVersion,TotalArchiveItemCount,TotalArchiveSize,TotalDataReplicationWaitDuration,TotalFailedDuration,TotalFinalizationDuration,TotalIdleDuration,TotalInProgressDuration,TotalMailboxItemCount,TotalMailboxSize,TotalProxyBackoffDuration,TotalQueuedDuration,TotalStalledDueToCIDuration,TotalStalledDueToHADuration,TotalStalledDueToMailboxLockedDuration,TotalStalledDueToReadCpu,TotalStalledDueToReadThrottle,TotalStalledDueToReadUnknown,TotalStalledDueToWriteCpu,TotalStalledDueToWriteThrottle,TotalStalledDueToWriteUnknown,TotalSuspendedDuration,TotalTransientFailureDuration,ValidationMessage,WorkloadType,@{n="BadItemList";e={@($_.Report.BadItems)}},@{n="LargeItemList";e={@($_.Report.LargeItems)}}
             }
             $logstring = "Getting Statistics for all communication error failed $wave move requests."
@@ -470,14 +473,14 @@ Process
             foreach ($request in $scefmrs) {
                 $b++
                 Write-Progress -Activity $logstring -Status "Processing Record $b of $RecordCount." -PercentComplete ($b/$RecordCount*100)
-                Connect-Exchange -ExchangeOrganization $ExchangeOrganization
+                Connect-Exchange -ExchangeOrganization $ExchangeOrganization > $null
                 $Script:cefmrs += $request | ForEach-Object {Invoke-ExchangeCommand -cmdlet Get-MoveRequestStatistics -string "-Identity $($_.alias) -IncludeReport" -ExchangeOrganization $ExchangeOrganization} | Select-Object -Property Alias,AllowLargeItems,ArchiveDomain,ArchiveGuid,BadItemLimit,BadItemsEncountered,BatchName,BytesTransferred,BytesTransferredPerMinute,CompleteAfter,CompletedRequestAgeLimit,CompletionTimestamp,DiagnosticInfo,Direction,DisplayName,DistinguishedName,DoNotPreserveMailboxSignature,ExchangeGuid,FailureCode,FailureSide,FailureTimestamp,FailureType,FinalSyncTimestamp,Flags,Identity,IgnoreRuleLimitErrors,InitialSeedingCompletedTimestamp,InternalFlags,IsOffline,IsValid,ItemsTransferred,LargeItemLimit,LargeItemsEncountered,LastUpdateTimestamp,MailboxIdentity,Message,MRSServerName,OverallDuration,PercentComplete,PositionInQueue,Priority,Protect,QueuedTimestamp,RecipientTypeDetails,RemoteArchiveDatabaseGuid,RemoteArchiveDatabaseName,RemoteCredentialUsername,RemoteDatabaseGuid,RemoteDatabaseName,RemoteGlobalCatalog,RemoteHostName,SourceArchiveDatabase,SourceArchiveServer,SourceArchiveVersion,SourceDatabase,SourceServer,SourceVersion,StartAfter,StartTimestamp,Status,StatusDetail,Suspend,SuspendedTimestamp,SuspendWhenReadyToComplete,SyncStage,TargetArchiveDatabase,TargetArchiveServer,TargetArchiveVersion,TargetDatabase,TargetDeliveryDomain,TargetServer,TargetVersion,TotalArchiveItemCount,TotalArchiveSize,TotalDataReplicationWaitDuration,TotalFailedDuration,TotalFinalizationDuration,TotalIdleDuration,TotalInProgressDuration,TotalMailboxItemCount,TotalMailboxSize,TotalProxyBackoffDuration,TotalQueuedDuration,TotalStalledDueToCIDuration,TotalStalledDueToHADuration,TotalStalledDueToMailboxLockedDuration,TotalStalledDueToReadCpu,TotalStalledDueToReadThrottle,TotalStalledDueToReadUnknown,TotalStalledDueToWriteCpu,TotalStalledDueToWriteThrottle,TotalStalledDueToWriteUnknown,TotalSuspendedDuration,TotalTransientFailureDuration,ValidationMessage,WorkloadType,@{n="TotalTransientFailureMinutes";e={@($_.TotalTransientFailureDuration.TotalMinutes)}},@{n="TotalStalledDueToMailboxLockedMinutes";e={@($_.TotalStalledDueToMailboxLockedDuration.TotalMinutes)}}
            }
         }
         'UpdateMigrationWaveTracking' {
             $logstring = "Getting all available move requests for Migration Wave Tracking Update"
             Write-Log -Message $logstring -EntryType Attempting
-            Connect-Exchange -ExchangeOrganization $ExchangeOrganization
+            Connect-Exchange -ExchangeOrganization $ExchangeOrganization > $null
             $Script:mr = Invoke-ExchangeCommand -cmdlet Get-MoveRequest -string "-ResultSize Unlimited" -ExchangeOrganization $ExchangeOrganization
             $Script:fmr = @($mr | ? {$_.status -eq 'Failed'})
             $Script:ipmr = @($mr | ? {$_.status -eq 'InProgress'})
@@ -491,7 +494,7 @@ Process
         'Offboarding' {
             $logstring = "Getting all available offboarding move requests"
             Write-Log -Message $logstring -EntryType Attempting
-            Connect-Exchange -ExchangeOrganization $ExchangeOrganization
+            Connect-Exchange -ExchangeOrganization $ExchangeOrganization > $null
             $Script:mr = Invoke-ExchangeCommand -cmdlet Get-MoveRequest -string "-ResultSize Unlimited" | where-object {$_.direction -eq 'Push'}
             $Script:fmr = @($mr | ? {$_.status -eq 'Failed'})
             $Script:ipmr = @($mr | ? {$_.status -eq 'InProgress'})
@@ -510,7 +513,7 @@ Process
             foreach ($request in $Script:mr) {
                 $b++
                 Write-Progress -Activity $logstring -Status "Processing Record $b of $RecordCount." -PercentComplete ($b/$RecordCount*100)
-                Connect-Exchange -ExchangeOrganization $ExchangeOrganization
+                Connect-Exchange -ExchangeOrganization $ExchangeOrganization > $null
                 $Script:mrs += Invoke-ExchangeCommand -cmdlet Get-MoveRequestStatistics -string "-Identity $($request.exchangeguid)" -ExchangeOrganization $ExchangeOrganization
             }
             $Script:ipmrs = @($Script:mrs | where-object {$psitem.status -like 'InProgress'})
@@ -526,7 +529,7 @@ Process
             foreach ($request in $fmr) {
                 $b++
                 Write-Progress -Activity $logstring -Status "Processing Record $b of $RecordCount." -PercentComplete ($b/$RecordCount*100)
-                Connect-Exchange -ExchangeOrganization $ExchangeOrganization
+                Connect-Exchange -ExchangeOrganization $ExchangeOrganization > $null
                 $Script:fmrs += Invoke-ExchangeCommand -cmdlet Get-MoveRequestStatistics -string "-Identity $($request.exchangeguid)" -ExchangeOrganization $ExchangeOrganization
             }
         }
