@@ -259,6 +259,10 @@ param
 $SourceData
 ,
 [string]$ExchangeOrganization
+,
+[parameter()]
+[validateset('All','Missing','Unexpected')]
+$Report
 )
 
 switch ($wavetype) 
