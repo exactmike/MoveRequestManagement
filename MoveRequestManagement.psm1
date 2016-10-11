@@ -264,7 +264,6 @@ $SourceData
 [validateset('All','Missing','Unexpected')]
 $Report
 )
-
 switch ($wavetype) 
 {
     'Full' 
@@ -288,7 +287,7 @@ $MoveRequests = $Script:mr
 $MRLookupHash = @($Script:mr | Group-Object -AsHashTable -AsString -Property ExchangeGuid)
 $WTLookupHash = @($WaveData | Group-Object -AsHashTable -AsString -Property ExchangeGuid)
 $UnexpectedMR = @(
-  $MoveRequests | Where-Object -FilterScript {-not $WTLookupHash.containskey($_.ExchangeGuid)}
+  $MoveRequests | Where-Object -FilterScript {-not $WTLookupHash.containskey($_.ExchangeGuid.guid)}
 )
 $MissingMR = @(
   $WaveData | Where-Object -FilterScript {-not $MRLookupHash.containskey($_.ExchangeGuid)}
