@@ -562,7 +562,7 @@ Process
             foreach ($request in $ipmr) {
                 $b++
                 Write-Progress -Activity $logstring -Status "Processing Record $b of $RecordCount." -PercentComplete ($b/$RecordCount*100)
-                Connect-Exchange -ExchangeOrganization $ExchangeOrganization
+                Connect-Exchange -ExchangeOrganization $ExchangeOrganization > $null
                 $Script:ipmrs += Invoke-ExchangeCommand -cmdlet Get-MoveRequestStatistics -string "-Identity $($request.exchangeguid)" -ExchangeOrganization $ExchangeOrganization
             }
         }
@@ -840,6 +840,8 @@ param
     [string]$Sender
     ,
     [string]$ExchangeOrganization #convert to Dynamic Parameter
+    ,
+    $SourceData
 )
 while ($True)
 {
@@ -855,9 +857,10 @@ while ($True)
             Operation = $Operation
             Wave = $Wave
             WaveType = $WaveType
-		    ExchangeOrganization = $ExchangeOrganization
+		        ExchangeOrganization = $ExchangeOrganization
             Sender = $Sender
             Recipients = $Recipients
+            SourceData = $SourceData
         }
         Watch-MRMMoveRequest @WMRParams
         $lastruncompletion = get-date
