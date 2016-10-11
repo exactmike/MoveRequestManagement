@@ -281,10 +281,10 @@ switch ($wavetype)
 #check for convergence of Move Requests and Wave Tracking
 Get-MRMMoveRequestReport -Wave $wave -WaveType $wavetype -operation WaveMonitoring -ExchangeOrganization $ExchangeOrganization
 $mraliases = @($Script:mr | select-object -ExpandProperty Alias)
-$wtaliases = @($WaveSourceData | Select-Object -ExpandProperty Alias) 
+$wtaliases = @($WaveData | Select-Object -ExpandProperty Alias) 
 $unexpectedMR = @($mraliases | where-object {$_ -notin $wtaliases})
 $missingMR = @($wtaliases | where-object {$_ -notin $mraliases})
-$CountsMatch = ($WaveSourceData.count -eq $mr.Count)
+$CountsMatch = ($WaveData.count -eq $mr.Count)
 If ($CountsMatch -and $unexpectedMR.count -eq 0 -and $missingMR.count -eq 0) 
 {
     Write-Log -Message "Migration Wave Tracking and Mailbox Move List Convergence Check PASSED" -Verbose
