@@ -280,12 +280,17 @@ switch ($wavetype)
 }#switch
 #check for convergence of Move Requests and Wave Tracking
 Get-MRMMoveRequestReport -Wave $wave -WaveType $wavetype -operation WaveMonitoring -ExchangeOrganization $ExchangeOrganization
-$mraliases = @($Script:mr | select-object -ExpandProperty Alias)
-$wtaliases = @($WaveData | Select-Object -ExpandProperty Alias) 
-$unexpectedMR = @($mraliases | where-object {$_ -notin $wtaliases})
-$missingMR = @($wtaliases | where-object {$_ -notin $mraliases})
-$CountsMatch = ($WaveData.count -eq $mr.Count)
-If ($CountsMatch -and $unexpectedMR.count -eq 0 -and $missingMR.count -eq 0) 
+$MoveRequests = $Script:mr
+$MRLookupHash = @($Script:mr | Group-Object -AsHashTable -AsString -Property ExchangeGuid)
+$WTLookupHash = @($WaveData | Group-Object -AsHashTable -AsString -Property ExchangeGuid)
+$UnexpectedMR = @(
+  $MoveRequests | Where-Object -FilterScript {-not $WTLookupHash.containskey($_.ExchangeGuid)}
+)
+$MissingMR = @(
+  $WaveData | Where-Object -FilterScript {-not $MRLookupHash.containskey($_.ExchangeGuid)}
+)
+$CountsMatch = ($WaveData.count -eq $MoveRequests.Count)
+If ($CountsMatch -and $UnexpectedMR.count -eq 0 -and $MissingMR.count -eq 0) 
 {
     Write-Log -Message "Migration Wave Tracking and Mailbox Move List Convergence Check PASSED" -Verbose
     $true
@@ -293,11 +298,23 @@ If ($CountsMatch -and $unexpectedMR.count -eq 0 -and $missingMR.count -eq 0)
 Else 
 {
     Write-Log -Verbose -errorlog -Message "ERROR: Migration Wave Tracking and Mailbox Move List Convergence Check FAILED" 
-    Write-Log "Move Request Alias Count: $($mraliases.count )" -Verbose -ErrorLog
-    Write-Log "Tracking data Alias Count: $($wtaliases.count)" -Verbose -ErrorLog
-    Write-Log "Unexpected Move Requests: $($unexpectedMR -join ',')" -Verbose -ErrorLog
-    Write-Log "Missing Move Requests: $($missingMR -join ',')" -Verbose -ErrorLog
-    $false
+    Write-Log "Move Request Count: $($MoveRequests.count )" -Verbose -ErrorLog
+    Write-Log "Tracking data Alias Count: $($WaveData.count)" -Verbose -ErrorLog
+    Write-Log "Unexpected Move Requests Count: $($UnexpectedMR.Count)" -Verbose -ErrorLog
+    Write-Log "Missing Move Requests Count: $($MissingMR.Count)" -Verbose -ErrorLog
+    switch ($Report)
+    {
+      NULL {$false}
+      'All'
+      {
+        [pscustomobject]@{
+            MissingMoveRequests = $MissingMR
+            UnexpectedMoveRequests = $UnexpectedMR
+        }
+      }
+      'Missing' {$MissingMR}
+      'Unexpected' {$UnexpectedMR}
+    }
 }#Else
 }#function Test-MRMTrackingListAndRequestConvergence
 function Start-MRMMoveRequestCompletion
