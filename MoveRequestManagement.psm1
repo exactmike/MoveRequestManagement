@@ -159,7 +159,7 @@ $SourceData = $Script:sourcedata
             $identifier = $r.userPrincipalName
             Write-Progress -Activity "Creating or Verifying Move Requests" -Status "Processing Record $b of $RecordCount. Processing Request for user $identifier." -PercentComplete ($b/$RecordCount*100)  
             if (-not $MRIdentifiersLookup.ContainsKey($R.ExchangeGuid)) {
-                Connect-Exchange -ExchangeOrganization $ExchangeOrganization
+                Connect-Exchange -ExchangeOrganization $ExchangeOrganization > $null
                 $LogString = "Creating Move Request for $identifier."
                 Write-Log -Message $LogString -Verbose -EntryType Attempting -LogPath $LogPath
                 $MRParams.Identity = $R.ExchangeGuid
@@ -171,7 +171,7 @@ $SourceData = $Script:sourcedata
                 $Global:ErrorActionPreference = 'Continue'
             }
             else {
-                Write-Log -Message "Move Request for $identifier already exists." -verbose -EntryType Notification -LogPath $LogPath
+                Write-Log -Message "Move Request for $identifier in Wave $($r.wave) already exists." -verbose -EntryType Notification -LogPath $LogPath
             }
         }#Try
         Catch {
@@ -240,7 +240,7 @@ if ($proceed -eq $True)
         $SMRQParams.Identity = $request.ExchangeGuid
         $logstring = "Set Properties of Move Request $($Request.UserPrincipalName) for Completion Preparation"
         Write-Progress -Activity $logstring  -Status "Processing $($Request.UserPrincipalName), record $b of $RecordCount." -PercentComplete ($b/$RecordCount*100)
-        Connect-Exchange -ExchangeOrganization $ExchangeOrganization
+        Connect-Exchange -ExchangeOrganization $ExchangeOrganization > $null
         Try {
             Write-Log -Message $logstring -Verbose -EntryType Attempting
             Invoke-ExchangeCommand -ExchangeOrganization $ExchangeOrganization -cmdlet 'Set-MoveRequest' -splat $SMRQParams
@@ -392,7 +392,7 @@ if ($proceed -eq $true) {
         $b++
         Write-Progress -Activity "Processing move request resume for completion for all $wave move requests." -Status "Processing $($Request.PrimarySMTPAddress), record $b of $RecordCount." -PercentComplete ($b/$RecordCount*100)
         If ($request.PrimarySmtpAddress -notin $MigrationBlockListPSMTP) {
-            Connect-Exchange -ExchangeOrganization $ExchangeOrganization
+            Connect-Exchange -ExchangeOrganization $ExchangeOrganization > $null
             Try {
                 $logstring = "Resume Move Request $($Request.PrimarySMTPAddress) with Exchange Guid $($request.ExchangeGuid) for Completion."
                 Write-Log -Message $logstring -Verbose -EntryType Attempting
@@ -470,7 +470,7 @@ if ($proceed -eq $true)
     {
         $b++
         Write-Progress -Activity "Processing move request resume for delta sync for all $wave move requests." -Status "Processing $($Request.UserPrincipalName), record $b of $RecordCount." -PercentComplete ($b/$RecordCount*100)
-        Connect-Exchange -ExchangeOrganization $ExchangeOrganization
+        Connect-Exchange -ExchangeOrganization $ExchangeOrganization > $null
         Try {
             $logstring = "Resume Move Request $($Request.UserPrincipalName) with Exchange GUID $($request.ExchangeGuid) for Delta Sync."
             Write-Log -Message $logstring -Verbose -EntryType Attempting
@@ -519,14 +519,14 @@ Begin
     function Get-MoveRequestForWave {
         switch ($WaveType) {
             'Full' {
-                Connect-Exchange -ExchangeOrganization $ExchangeOrganization
+                Connect-Exchange -ExchangeOrganization $ExchangeOrganization > $null
                 $Logstring = "Get all existing wave $wave move requests"
                 Write-Log -message $Logstring -Verbose -EntryType Attempting 
                 $Script:mr = @(Invoke-ExchangeCommand -cmdlet Get-MoveRequest -string "-BatchName $Wave* -ResultSize Unlimited" -ExchangeOrganization $ExchangeOrganization | where-object {$_.batchname -match "\b$wave(\.\S*|\b)"})
                 #add error handling
             }
             'Sub' {
-                Connect-Exchange -ExchangeOrganization $ExchangeOrganization
+                Connect-Exchange -ExchangeOrganization $ExchangeOrganization > $null
                 $Logstring = "Get all existing sub wave $wave move requests"
                 Write-Log -message $Logstring -Verbose -EntryType Attempting 
                 $Script:mr = @(Invoke-ExchangeCommand -cmdlet Get-MoveRequest -string "-BatchName $Wave -ResultSize Unlimited" -ExchangeOrganization $ExchangeOrganization)
@@ -941,7 +941,7 @@ while ($True)
     {
         $lastrunstart = get-date
         $nextrun = $nextrun.AddMinutes($runperiod)
-        Connect-Exchange -ExchangeOrganization $ExchangeOrganization
+        Connect-Exchange -ExchangeOrganization $ExchangeOrganization > $null
         Write-Log "Running Watch-MRMMoveRequest" -Verbose
         $WMRParams =
         @{
@@ -1004,7 +1004,7 @@ foreach ($request in $Script:lifmrs)
     $LItemsNotDeletedList = $QualifiedLargeItems -join "`r`n"
     $QualifiedLargeItemCount = $QualifiedLargeItems.count
     If ($QualifiedLargeItemCount -gt 0) {
-        Connect-Exchange -ExchangeOrganization $ExchangeOrganization
+        Connect-Exchange -ExchangeOrganization $ExchangeOrganization > $null
         $OLRecipientPrimarySmtpAddress = Get-OLRecipient -Identity $DisplayName | Select-Object -ExpandProperty PrimarySmtpAddress
         $LIReport = New-Object -TypeName PSObject -Property @{DisplayName = $DisplayName; PrimarySmtpAddress = $OLRecipientPrimarySmtpAddress; LargeOrBadItemCount = $QualifiedLargeItemCount; LargeOrBadItemList = $LItemsNotDeletedList; FailureTimeStamp = $FailureTimeStamp}
         $LIReports += $LIReport | Select-Object DisplayName,PrimarySmtpAddress,LargeOrBadItemCount,LargeOrBadItemList,FailureTimeStamp
@@ -1198,7 +1198,7 @@ foreach ($SourceRecord in $WaveSourceData) {
                 Write-Progress -Activity "Processing Mailbox Configuration And Service Account Permissions for $wave Mailboxes." -Status "Processing Record $b of $RecordCount." -PercentComplete ($b/$RecordCount*100)
                 $upn = $SourceRecord.UserPrincipalName
                 Write-Log -Message "Mailbox Configuration for $upn is in progress." -Verbose -LogPath $LogPath
-                Reconnect-ExchangeOnline
+                Connect-Exchange -ExchangeOrganization $exchangeOrganization > $null
                 #Set-Mailbox
                 try {
                     $SetMailboxConfiguration = @{}
@@ -1283,7 +1283,7 @@ foreach ($SourceRecord in $WaveSourceData) {
                 Write-Progress -Activity "Processing Mailbox and SendAS Permissions for $wave Mailboxes." -Status "Processing Record $b of $RecordCount." -PercentComplete ($b/$RecordCount*100)
                 $upn = $SourceRecord.UserPrincipalName
                 Write-Log -Message "Mailbox Configuration for $upn is in progress." -Verbose -LogPath $LogPath
-                Reconnect-ExchangeOnline
+                Connect-Exchange -ExchangeOrganization $exchangeOrganization > $null
                 #Set Full Access Permissions from Export
                 try {
                     Write-Log -Message "Attempting: Set-OLFullAccessPermissions for $upn." -Verbose -LogPath $LogPath
@@ -1346,7 +1346,7 @@ $RecordCount = $FullaccessPerms.Count
 $b=0
 if ($RecordCount -gt 0) {
     foreach ($perm in $FullaccessPerms) {
-        Reconnect-ExchangeOnline
+        Connect-Exchange -ExchangeOrganization $exchangeOrganization > $null
         $b++
         Write-Progress -Activity "Granting FullAccess Permissions in Exchange Online from Full Access Configurations Export." -Status "Processing Record $b of $RecordCount" -PercentComplete ($b/$recordcount*100) 
         Try {
