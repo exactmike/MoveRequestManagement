@@ -100,7 +100,8 @@ $SourceData = $Script:sourcedata
         }
     #if ($StartTime -ne $null) {$MRParams.StartAfter = $StartTime} #experimental and not supported by microsoft.
     #Create Move Request in suspended state using -Suspend and perhaps -SuspendComment parameters
-    $mraliases = ($Script:mr | Select-Object -expandproperty alias)
+    #$mraliases = ($Script:mr | Select-Object -expandproperty alias)
+    $MRIdentifiersLookup = $script:MR | Group-Object -AsHashTable -AsString -Property ExchangeGuid
     $b = 0
     $RecordCount = $WaveData.Count
     $CurrentOrgAdminProfileSystems = Get-OneShellVariableValue -Name CurrentOrgAdminProfileSystems
@@ -157,11 +158,11 @@ $SourceData = $Script:sourcedata
             }
             $identifier = $r.userPrincipalName
             Write-Progress -Activity "Creating or Verifying Move Requests" -Status "Processing Record $b of $RecordCount. Processing Request for user $identifier." -PercentComplete ($b/$RecordCount*100)  
-            if ($R.Alias -notin $mraliases) {
+            if (-not $MRIdentifiersLookup.ContainsKey($R.ExchangeGuid)) {
                 Connect-Exchange -ExchangeOrganization $ExchangeOrganization
                 $LogString = "Creating Move Request for $identifier."
                 Write-Log -Message $LogString -Verbose -EntryType Attempting -LogPath $LogPath
-                $MRParams.Identity = $R.UserPrincipalName
+                $MRParams.Identity = $R.ExchangeGuid
                 $MRParams.BatchName = $r.Wave
                 $Global:ErrorActionPreference = 'Stop'
                 Invoke-ExchangeCommand -splat $MRParams -cmdlet New-MoveRequest -ExchangeOrganization $ExchangeOrganization 
@@ -384,15 +385,19 @@ else {
 if ($proceed -eq $true) {
     $b = 0
     $RecordCount = $Script:mr.count
+    $RMRParams = @{
+      ErrorAction = 'Stop'
+    }
     foreach ($request in $WaveSourceData) {
         $b++
         Write-Progress -Activity "Processing move request resume for completion for all $wave move requests." -Status "Processing $($Request.PrimarySMTPAddress), record $b of $RecordCount." -PercentComplete ($b/$RecordCount*100)
         If ($request.PrimarySmtpAddress -notin $MigrationBlockListPSMTP) {
             Connect-Exchange -ExchangeOrganization $ExchangeOrganization
             Try {
-                $logstring = "Resume Move Request $($Request.PrimarySMTPAddress)"
+                $logstring = "Resume Move Request $($Request.PrimarySMTPAddress) with Exchange Guid $($request.ExchangeGuid) for Completion."
                 Write-Log -Message $logstring -Verbose -EntryType Attempting
-                Resume-OLMoveRequest -Identity $request.PrimarySmtpAddress -ErrorAction Stop
+                $RMRParams.Identity = $request.ExchangeGuid
+                Invoke-ExchangeCommand -cmdlet 'Resume-MoveRequest' -ExchangeOrganization $ExchangeOrganization -splat $RMRParams
                 Write-Log -Message $logstring -Verbose -EntryType Succeeded
             }
             Catch {
@@ -409,6 +414,81 @@ else {
     Write-Log -verbose -errorlog -Message "ERROR: Unable to Proceed with Move Request Completions for $wave because Convergence Check FAILED" 
 }
 }#function Start-MRMMoveRequestCompletion
+function Resume-MRMMoveRequestForDeltaSync
+{
+[cmdletbinding()]
+param
+(
+    [parameter(Mandatory = $true)]
+    [string]$wave
+    ,
+    [parameter(Mandatory = $true)]
+    [ValidateSet('Full','Sub')]
+    [string]$wavetype
+    ,
+    [string]$ExchangeOrganization #convert to dynamic parameter
+    ,
+    $SourceData = $Script:SourceData
+    ,
+    [switch]$ByPassConvergenceCheck
+    ,
+    [switch]$IncludeBadADLookkupStatusInConvergenceCheck
+
+)
+switch ($wavetype)
+{
+        'Full' {$WaveSourceData = $SourceData | Where-Object {$_.Wave -match "\b$wave(\.\S*|\b)"}}
+        'Sub' {$WaveSourceData = $SourceData | Where-Object {$_.wave -eq $wave}}
+}
+#check for convergence of Move Requests and Wave Tracking
+if ($ByPassConvergenceCheck)
+{
+    Write-Log -Message "WARNING:Migration Tracking Database and Move Request Convergence for $Wave has been bypassed." -EntryType Notification -Verbose
+    $proceed = $true
+}
+else {
+    $TestConvergenceParams =
+    @{
+        Wave = $wave
+        WaveType = $wavetype
+        ExchangeOrganization = $ExchangeOrganization
+        IncludeBadADLookupStatus = $IncludeBadADLookkupStatusInConvergenceCheck
+        Report = 'All'
+    }
+    $proceed = Test-MRMConvergence @TestConvergenceParams
+}
+#If Convergence checks out or Bypass Convergence was chosen, proceed with move request delta synchronizations.
+if ($proceed -eq $true)
+{
+    $b = 0
+    $RecordCount = $Script:mr.count
+    $RMRParams = @{
+      ErrorAction = 'Stop'
+      SuspendWhenReadyToComplete = $true
+    }
+    foreach ($request in $WaveSourceData)
+    {
+        $b++
+        Write-Progress -Activity "Processing move request resume for delta sync for all $wave move requests." -Status "Processing $($Request.UserPrincipalName), record $b of $RecordCount." -PercentComplete ($b/$RecordCount*100)
+        Connect-Exchange -ExchangeOrganization $ExchangeOrganization
+        Try {
+            $logstring = "Resume Move Request $($Request.UserPrincipalName) with Exchange GUID $($request.ExchangeGuid) for Delta Sync."
+            Write-Log -Message $logstring -Verbose -EntryType Attempting
+            $RMRParams.Identity = $request.ExchangeGuid
+            Invoke-ExchangeCommand -cmdlet 'Resume-MoveRequest' -ExchangeOrganization $ExchangeOrganization -splat $RMRParams
+            Write-Log -Message $logstring -Verbose -EntryType Succeeded
+        }
+        Catch {
+            Write-Log -verbose -errorlog -Message $logstring -EntryType Failed
+            Write-Log -Message $_.tostring() -ErrorLog
+        }
+    }#foreach
+}#if
+else
+{
+    Write-Log -verbose -errorlog -Message "ERROR: Unable to Proceed with Move Request Completions for $wave because Convergence Check FAILED" 
+}#else
+}#function Resume-MRMMoveRequestForDeltaSync
 function Get-MRMMoveRequestReport
 {
 [cmdletbinding()]
