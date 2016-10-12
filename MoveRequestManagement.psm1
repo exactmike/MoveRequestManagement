@@ -191,18 +191,38 @@ param
     [ValidateSet('Full','Sub')]
     [string]$wavetype
     ,
-    [switch]$FailedOnly
-    ,
     [int]$LargeItemLimit
     ,
     [int]$BadItemLimit
     , 
     [string]$ExchangeOrganization #convert to dynamic parameter 
+    ,
+    $SourceData
 )#Param
-    Write-Log -Message "Getting Move Request Data for Wave $Wave." -Verbose 
-    Get-MRMMoveRequestReport -Wave $wave -WaveType $wavetype -operation WaveMonitoring -ExchangeOrganization $ExchangeOrganization
-    if ($FailedOnly) {$ToProcess = $Script:fmr}
-    else {$ToProcess = $Script:mr}
+switch ($wavetype)
+{
+        'Full' {$WaveSourceData = $SourceData | Where-Object {$_.Wave -match "\b$wave(\.\S*|\b)"}}
+        'Sub' {$WaveSourceData = $SourceData | Where-Object {$_.wave -eq $wave}}
+}
+#check for convergence of Move Requests and Wave Tracking
+if ($ByPassConvergenceCheck) 
+{
+    Write-Log -Message "WARNING:Migration Tracking Database and Move Request Convergence for $Wave has been bypassed." -EntryType Notification -Verbose
+    $proceed = $true
+}
+else {
+    $TestConvergenceParams =
+    @{
+        Wave = $wave
+        WaveType = $wavetype
+        ExchangeOrganization = $ExchangeOrganization
+        IncludeBadADLookupStatus = $IncludeBadADLookkupStatusInConvergenceCheck
+        Report = 'All'
+    }
+    $proceed = Test-MRMConvergence @TestConvergenceParams
+}
+if ($proceed -eq $True)
+{
     #build parameter hash table
     $SMRQParams = @{}
     $SMRQParams.SuspendWhenReadyToComplete = $false
@@ -211,14 +231,14 @@ param
     $SMRQParams.WarningAction = 'SilentlyContinue'
     $SMRQParams.ErrorAction = 'Stop'
     $SMRQParams.Confirm = $False
-    $RecordCount = $ToProcess.count
+    $RecordCount = $WaveSourceData.count
     $b=0
-    foreach ($request in $ToProcess) 
+    foreach ($request in $WaveSourceData) 
     {
         $b++
-        $SMRQParams.Identity = $request.Exchangeguid.guid
-        $logstring = "Set Properties of Move Request $($Request.DisplayName) for Completion Preparation"
-        Write-Progress -Activity $logstring  -Status "Processing $($Request.DisplayName), record $b of $RecordCount." -PercentComplete ($b/$RecordCount*100)
+        $SMRQParams.Identity = $request.ExchangeGuid
+        $logstring = "Set Properties of Move Request $($Request.UserPrincipalName) for Completion Preparation"
+        Write-Progress -Activity $logstring  -Status "Processing $($Request.UserPrincipalName), record $b of $RecordCount." -PercentComplete ($b/$RecordCount*100)
         Connect-Exchange -ExchangeOrganization $ExchangeOrganization
         Try {
             Write-Log -Message $logstring -Verbose -EntryType Attempting
@@ -230,6 +250,11 @@ param
             Write-Log -Message $_.tostring() -ErrorLog
         }
     }
+}
+else
+{
+    Write-Log -verbose -errorlog -Message -EntryType Failed "Unable to Set Move Requests for Completion for $wave because Convergence Check FAILED"
+}
 }#Set-MRMMoveRequestForCompletion
 function Test-MRMConvergence
 {
