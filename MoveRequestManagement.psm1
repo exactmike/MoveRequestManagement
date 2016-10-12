@@ -50,13 +50,11 @@ param
 ###################################################################################################
 Function New-MRMMoveRequest
 {
-[cmdletbinding(SupportsShouldProcess)]
+[cmdletbinding()]
 param
 (
 $SourceData = $Script:sourcedata
 ,
-#$LogFileBaseName = ('_NewWaveBatchMoveRequest.log')
-#,
 [parameter(Mandatory=$True)]
 [string]$wave
 ,
@@ -77,9 +75,6 @@ $SourceData = $Script:sourcedata
 [parameter(Mandatory=$true)]
 [string]$ExchangeOrganization #Target Exchange Organization or Online if doing offboarding back to on premises
 )
-    [string]$Stamp = Get-Date -Format yyyyMMdd-HHmm
-    #$LogPath = $Script:LogFolderPath + $stamp + '-' + $wave + $LogFileBaseName
-    #$ErrorLogPath = $Script:LogFolderPath + $stamp + '-' + $wave + '-ERRORS' + $LogFileBaseName
     #Get Endpoints and Credential Data from OneShell
     $CurrentOrgAdminProfileSystems = Get-OneShellVariableValue -Name CurrentOrgAdminProfileSystems
     $CurrentOrgProfile = Get-OneShellVariableValue -Name CurrentOrgProfile
@@ -201,14 +196,9 @@ param
     [int]$LargeItemLimit
     ,
     [int]$BadItemLimit
-    ,
-    [string]$LogFileBasePath = '-MoveRequestCompletionPreparation.log'
     , 
     [string]$ExchangeOrganization #convert to dynamic parameter 
 )#Param
-    [string]$stamp = Get-Date -Format yyyyMMdd-hhmm
-    [string]$LogPath = ($trackingfolder + $stamp + '-' + $wave + $LogFileBasePath)
-    [string]$ErrorLogPath = ($trackingfolder + $stamp + '-ERRORS-' + $wave + $LogFileBasePath)
     Write-Log -Message "Getting Move Request Data for Wave $Wave." -Verbose 
     Get-MRMMoveRequestReport -Wave $wave -WaveType $wavetype -operation WaveMonitoring -ExchangeOrganization $ExchangeOrganization
     if ($FailedOnly) {$ToProcess = $Script:fmr}
@@ -332,8 +322,6 @@ param
     [ValidateSet('Full','Sub')]
     [string]$wavetype
     ,
-    [string]$LogFileBasePath = '-MoveRequestCompletion.log'
-    ,
     [string[]]$MigrationBlockList
     , 
     [string]$ExchangeOrganization #convert to dynamic parameter 
@@ -345,9 +333,6 @@ param
     [switch]$IncludeBadADLookkupStatusInConvergenceCheck
 
 )
-[string]$stamp = Get-Date -Format yyyyMMdd_hhmm
-[string]$LogPath = ($trackingfolder + $stamp + '-' + $wave + $LogFileBasePath)
-[string]$ErrorLogPath = ($trackingfolder + $stamp + '-ERRORS-' + $wave + $LogFileBasePath)
 switch ($wavetype)
 {
         'Full' {$WaveSourceData = $SourceData | Where-Object {$_.Wave -match "\b$wave(\.\S*|\b)"}}
@@ -885,16 +870,14 @@ function Get-MRMNonDeletedLargeItemReport
 param
 (
     [string]$Wave
-    ,[datetime]$FailedSince
-    ,[switch]$SendMail
-    ,[string]$ExchangeOrganization
-    ,$MailNotificationSender
-    ,$SMTPServer = $CurrentOrgProfile.general.MailRelayServerFQDN
-    ,[string[]]$ToRecipients
-    ,[string[]]$CCRecipients
+    ,
+    [datetime]$FailedSince
+    ,
+    [string]$ExchangeOrganization
+    ,
+    [Parameter(Mandatory)]
+    [string]$outputCSVFileFullPathWithName
 )
-[string]$Stamp = Get-Date -Format yyyyMMdd_HHmm
-[string]$LargeItemReportFile = $trackingfolder + $Stamp + '_' + $wave + '_' + 'LargeItemReport.csv'
 $LIReports = @()
 #hash table for parameters for Get-MoveRequestReportData
 $GetMRRD = @{}
@@ -923,24 +906,7 @@ foreach ($request in $Script:lifmrs)
 } 
 if ($LIReports.count -gt 0)
 {
-    $LIReports | Export-Csv -NoTypeInformation -Path $LargeItemReportFile -Append
-    if ($SendMail)
-    {
-        Start-Sleep -Seconds 5
-        $sendmailparams = @{}
-        $sendmailparams.Cc = $CCRecipients
-        $sendmailparams.To = $ToRecipients
-        $sendmailparams.Attachments = $LargeItemReportFile
-        $sendmailparams.From = $MailNotificationSender
-        $sendmailparams.Subject = "Large Item Report for Wave $Wave"
-        $Sendmailparams.SmtpServer = $SMTPServer
-        $sendmailparams.body = @"
-Please find attached the Large Item Report File for wave $wave.
-
-Mike Campbell, Senior Consultant
-o:312-589-2080  m:864-233-6174 | mike.campbell@perficient.com
-"@
-        Send-MailMessage @sendmailparams
+    $LIReports | Export-Csv -NoTypeInformation -Path $outputCSVFileFullPathWithName -Append
     }#If $sendmail
 }#If $LIReports.count -gt 0
 }#function Get-MRMNonDeletedLargeItemReport
@@ -1255,11 +1221,6 @@ param(
     ,
     [switch]$automapping
 )
-if (-not $logpath -or -not $errorlogpath) {
-    $stamp = get-timestamp
-    $LogPath = $trackingfolder + $stamp + '-AddOLFullAccessPerms.log'
-    $ErrorLogPath = $trackingfolder + $stamp + '-ERRORS-AddOLFullAccessPerms.log'
-}
 if (-not $Script:FullAccessConfigurations) {
     Write-Log "Identifying most recent Full Access Configurations File in Source Data Folder $ReferenceFolder"
     Try {
