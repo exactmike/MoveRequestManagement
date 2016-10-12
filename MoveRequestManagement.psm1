@@ -231,7 +231,7 @@ param
         }
     }
 }#Set-MRMMoveRequestForCompletion
-function Test-MRMTrackingListAndRequestConvergence
+function Test-MRMConvergence
 {
 [cmdletbinding()]
 param
@@ -351,11 +351,12 @@ else {
         WaveType = $wavetype
         ExchangeOrganization = $ExchangeOrganization
         IncludeBadADLookupStatus = $IncludeBadADLookkupStatusInConvergenceCheck
+        Report = 'All'
     }
-    $proceed = Test-MRMTrackingListAndRequestConvergence @TestConvergenceParams
+    $proceed = Test-MRMConvergence @TestConvergenceParams
 }
 #If Convergence checks out or Bypass Convergence was chosen, proceed with move request completions.  
-if ($proceed) {
+if ($proceed -eq $true) {
     $b = 0
     $RecordCount = $Script:mr.count
     foreach ($request in $WaveSourceData) {
@@ -380,7 +381,7 @@ if ($proceed) {
     }
 }
 else {
-    Write-Log -verbose -errorlog -Message "ERROR: Unable to Proceed with Move Request Completions for $wave because Migration Wave Tracking and Mailbox Move List Convergence Check FAILED" 
+    Write-Log -verbose -errorlog -Message "ERROR: Unable to Proceed with Move Request Completions for $wave because Convergence Check FAILED" 
 }
 }#function Start-MRMMoveRequestCompletion
 function Get-MRMMoveRequestReport
