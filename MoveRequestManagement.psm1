@@ -1009,11 +1009,10 @@ foreach ($request in $Script:lifmrs)
         $LIReport = New-Object -TypeName PSObject -Property @{DisplayName = $DisplayName; PrimarySmtpAddress = $OLRecipientPrimarySmtpAddress; LargeOrBadItemCount = $QualifiedLargeItemCount; LargeOrBadItemList = $LItemsNotDeletedList; FailureTimeStamp = $FailureTimeStamp}
         $LIReports += $LIReport | Select-Object DisplayName,PrimarySmtpAddress,LargeOrBadItemCount,LargeOrBadItemList,FailureTimeStamp
     }
-} 
+}#foreach
 if ($LIReports.count -gt 0)
 {
     $LIReports | Export-Csv -NoTypeInformation -Path $outputCSVFileFullPathWithName -Append
-    }#If $sendmail
 }#If $LIReports.count -gt 0
 }#function Get-MRMNonDeletedLargeItemReport
 #New/Experimental:
