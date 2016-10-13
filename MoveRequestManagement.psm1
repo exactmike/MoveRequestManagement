@@ -487,7 +487,7 @@ if ($proceed -eq $true)
         if ($FailedOnly)
         {
           if (-not $FMRLookupHashByExchangeGuid.ContainsKey($request.ExchangeGuid))
-          {Continue RequestProcessing}
+          {Break RequestProcessing}
         }
         Try {
             Connect-Exchange -ExchangeOrganization $ExchangeOrganization > $null
