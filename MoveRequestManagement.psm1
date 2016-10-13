@@ -433,7 +433,8 @@ param
     [switch]$ByPassConvergenceCheck
     ,
     [switch]$IncludeBadADLookkupStatusInConvergenceCheck
-
+    ,
+    [switch]$FailedOnly
 )
 switch ($wavetype)
 {
@@ -466,12 +467,29 @@ if ($proceed -eq $true)
       ErrorAction = 'Stop'
       SuspendWhenReadyToComplete = $true
     }
+    if ($FailedOnly)
+    {
+      if (-not $ByPassConvergenceCheck)
+      {
+        $FMRLookupHashByExchangeGuid = $script:fmr | Group-Object -AsHashTable -AsString -Property ExchangeGuid 
+      }
+      else
+      {
+        $fmr = Get-MRMMoveRequestReport -Wave $wave -WaveType $wavetype -operation WaveMonitoring -ExchangeOrganization $ExchangeOrganization -passthru
+        $FMRLookupHashByExchangeGuid = $fmr | Group-Object -AsHashTable -AsString -Property ExchangeGuid 
+      }
+    }
     foreach ($request in $WaveSourceData)
     {
         $b++
         Write-Progress -Activity "Processing move request resume for delta sync for all $wave move requests." -Status "Processing $($Request.UserPrincipalName), record $b of $RecordCount." -PercentComplete ($b/$RecordCount*100)
-        Connect-Exchange -ExchangeOrganization $ExchangeOrganization > $null
+        if ($FailedOnly)
+        {
+          if (-not $FMRLookupHashByExchangeGuid.ContainsKey($request.ExchangeGuid))
+          {Continue}
+        }
         Try {
+            Connect-Exchange -ExchangeOrganization $ExchangeOrganization > $null
             $logstring = "Resume Move Request $($Request.UserPrincipalName) with Exchange GUID $($request.ExchangeGuid) for Delta Sync."
             Write-Log -Message $logstring -Verbose -EntryType Attempting
             $RMRParams.Identity = $request.ExchangeGuid
