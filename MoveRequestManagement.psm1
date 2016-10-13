@@ -454,6 +454,7 @@ else {
         WaveType = $wavetype
         ExchangeOrganization = $ExchangeOrganization
         IncludeBadADLookupStatus = $IncludeBadADLookkupStatusInConvergenceCheck
+        SourceData = $SourceData
         Report = 'All'
     }
     $proceed = Test-MRMConvergence @TestConvergenceParams
