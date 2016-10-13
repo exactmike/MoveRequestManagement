@@ -463,7 +463,7 @@ else {
 if ($proceed -eq $true)
 {
     $b = 0
-    $RecordCount = $Script:mr.count
+    $RecordCount = $WaveSourceData.count
     $RMRParams = @{
       ErrorAction = 'Stop'
       SuspendWhenReadyToComplete = $true
