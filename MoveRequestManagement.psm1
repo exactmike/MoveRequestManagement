@@ -480,14 +480,14 @@ if ($proceed -eq $true)
         $FMRLookupHashByExchangeGuid = $fmr | Group-Object -AsHashTable -AsString -Property ExchangeGuid 
       }
     }
-    foreach ($request in $WaveSourceData)
+    :RequestProcessing foreach ($request in $WaveSourceData)
     {
         $b++
         Write-Progress -Activity "Processing move request resume for delta sync for all $wave move requests." -Status "Processing $($Request.UserPrincipalName), record $b of $RecordCount." -PercentComplete ($b/$RecordCount*100)
         if ($FailedOnly)
         {
           if (-not $FMRLookupHashByExchangeGuid.ContainsKey($request.ExchangeGuid))
-          {Continue}
+          {Continue RequestProcessing}
         }
         Try {
             Connect-Exchange -ExchangeOrganization $ExchangeOrganization > $null
