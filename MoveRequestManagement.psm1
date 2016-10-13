@@ -483,28 +483,28 @@ if ($proceed -eq $true)
     foreach ($request in $WaveSourceData)
     {
         $b++
-        $ProcessThis = $true
         Write-Progress -Activity "Processing move request resume for delta sync for all $wave move requests." -Status "Processing $($Request.UserPrincipalName), record $b of $RecordCount." -PercentComplete ($b/$RecordCount*100)
-        if ($FailedOnly)
+        if ($FailedOnly -and $FMRLookupHashByExchangeGuid.Count -ge 1)
         {
           if (-not $FMRLookupHashByExchangeGuid.ContainsKey($request.ExchangeGuid))
-          {$ProcessThis = $false}
+          {Continue}
         }
-        if ($ProcessThis)
+        elseif ($FailedOnly)
+        {Continue}
+        Try
         {
-          Try {
-              Connect-Exchange -ExchangeOrganization $ExchangeOrganization > $null
-              $logstring = "Resume Move Request $($Request.UserPrincipalName) with Exchange GUID $($request.ExchangeGuid) for Delta Sync."
-              Write-Log -Message $logstring -Verbose -EntryType Attempting
-              $RMRParams.Identity = $request.ExchangeGuid
-              Invoke-ExchangeCommand -cmdlet 'Resume-MoveRequest' -ExchangeOrganization $ExchangeOrganization -splat $RMRParams
-              Write-Log -Message $logstring -Verbose -EntryType Succeeded
-          }
-                Catch {
-            Write-Log -verbose -errorlog -Message $logstring -EntryType Failed
-            Write-Log -Message $_.tostring() -ErrorLog
+            Connect-Exchange -ExchangeOrganization $ExchangeOrganization > $null
+            $logstring = "Resume Move Request $($Request.UserPrincipalName) with Exchange GUID $($request.ExchangeGuid) for Delta Sync."
+            Write-Log -Message $logstring -Verbose -EntryType Attempting
+            $RMRParams.Identity = $request.ExchangeGuid
+            Invoke-ExchangeCommand -cmdlet 'Resume-MoveRequest' -ExchangeOrganization $ExchangeOrganization -splat $RMRParams
+            Write-Log -Message $logstring -Verbose -EntryType Succeeded
         }
-        }
+        Catch
+        {
+          Write-Log -verbose -errorlog -Message $logstring -EntryType Failed
+          Write-Log -Message $_.tostring() -ErrorLog
+        } 
     }#foreach
 }#if
 else
