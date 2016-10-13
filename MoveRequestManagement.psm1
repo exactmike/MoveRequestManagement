@@ -666,7 +666,7 @@ End
     }
 }
 }#function Get-MRMMoveRequestReport
-function Watch-MRMMoveRequest 
+function Watch-MRMMoveRequest
 {
 [cmdletbinding()]
 param
@@ -687,8 +687,8 @@ param
     [string]$Sender
     ,
     [string]$ExchangeOrganization
-    ,
-    $SourceData = $Script:sourcedata
+    #,
+    #$SourceData = $Script:sourcedata
     #add convergence check into report data based on Source Data
 )
 #check for the wave completion hash table and create it if it does not exist
@@ -699,11 +699,11 @@ if (-not ($script:WaveMigrationOperationCompleted.ContainsKey($wave))) {$script:
 if ($script:WaveMigrationOperationCompleted.$wave -eq $false)
 {
 [string]$Stamp = Get-TimeStamp
-switch ($wavetype) 
-{
-    'Full' {$WaveSourceData = $SourceData | Where-Object {$_.Wave -match "\b$wave(\.\S*|\b)"}}
-    'Sub' {$WaveSourceData = $SourceData | Where-Object {$_.wave -eq $wave}}
-}
+#switch ($wavetype) 
+#{
+#    'Full' {$WaveSourceData = $SourceData | Where-Object {$_.Wave -match "\b$wave(\.\S*|\b)"}}
+#    'Sub' {$WaveSourceData = $SourceData | Where-Object {$_.wave -eq $wave}}
+#}
 $message = "Get Migration Wave $wave Move Request Report."
 Write-Log -message $message -Verbose -EntryType Attempting
 Get-MRMMoveRequestReport -wave $wave -WaveType $wavetype -operation WaveMonitoring -statsoperation All -ExchangeOrganization $ExchangeOrganization -ErrorAction Stop
