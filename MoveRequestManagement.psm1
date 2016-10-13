@@ -476,7 +476,7 @@ if ($proceed -eq $true)
       }
       else
       {
-        $fmr = Get-MRMMoveRequestReport -Wave $wave -WaveType $wavetype -operation WaveMonitoring -ExchangeOrganization $ExchangeOrganization -passthru
+        $fmr = Get-MRMMoveRequestReport -Wave $wave -WaveType $wavetype -operation WaveMonitoring -ExchangeOrganization $ExchangeOrganization -passthru | Where-Object -FilterScript {$_.status -like '*fail*'}
         $FMRLookupHashByExchangeGuid = $fmr | Group-Object -AsHashTable -AsString -Property ExchangeGuid 
       }
     }
