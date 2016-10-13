@@ -931,8 +931,8 @@ param
     [string]$Sender
     ,
     [string]$ExchangeOrganization #convert to Dynamic Parameter
-    ,
-    $SourceData
+    #,
+    #$SourceData
 )
 while ($True)
 {
@@ -951,7 +951,7 @@ while ($True)
 		        ExchangeOrganization = $ExchangeOrganization
             Sender = $Sender
             Recipients = $Recipients
-            SourceData = $SourceData
+            #SourceData = $SourceData
         }
         Watch-MRMMoveRequest @WMRParams
         $lastruncompletion = get-date
