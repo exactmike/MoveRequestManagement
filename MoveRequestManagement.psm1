@@ -219,6 +219,7 @@ else {
         ExchangeOrganization = $ExchangeOrganization
         IncludeBadADLookupStatus = $IncludeBadADLookkupStatusInConvergenceCheck
         Report = 'All'
+        SourceData = $SourceData
     }
     $proceed = Test-MRMConvergence @TestConvergenceParams
 }
