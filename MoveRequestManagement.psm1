@@ -195,8 +195,10 @@ param
     [int]$LargeItemLimit
     ,
     [int]$BadItemLimit
-    , 
-    [string]$ExchangeOrganization #convert to dynamic parameter 
+    ,
+    [string]$ExchangeOrganization #convert to dynamic parameter
+    ,
+    [switch]$ByPassConvergenceCheck
     ,
     $SourceData
 )#Param
