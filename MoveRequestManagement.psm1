@@ -50,31 +50,31 @@ param
 ###################################################################################################
 Function New-MRMMoveRequest
 {
-[cmdletbinding()]
-param
-(
-$SourceData = $Script:sourcedata
-,
-[parameter(Mandatory=$True)]
-[string]$wave
-,
-[parameter(Mandatory=$True)]
-[ValidateSet('Full','Sub')]
-[string]$wavetype
-#,
-#[datetime]$StartTime #experimental
-,
-[int]$LargeItemLimit = 50
-,
-[int]$BadItemLimit = 50
-,
-[bool]$SuspendWhenReadyToComplete = $True
-,
-[bool]$Suspend = $False
-,
-[parameter(Mandatory=$true)]
-[string]$ExchangeOrganization #Target Exchange Organization or Online if doing offboarding back to on premises
-)
+  [cmdletbinding()]
+  param
+  (
+    $SourceData = $Script:sourcedata
+    ,
+    [parameter(Mandatory=$True)]
+    [string]$wave
+    ,
+    [parameter(Mandatory=$True)]
+    [ValidateSet('Full','Sub')]
+    [string]$wavetype
+    #,
+    #[datetime]$StartTime #experimental
+    ,
+    [int]$LargeItemLimit = 50
+    ,
+    [int]$BadItemLimit = 50
+    ,
+    [bool]$SuspendWhenReadyToComplete = $True
+    ,
+    [bool]$Suspend = $False
+    ,
+    [parameter(Mandatory=$true)]
+    [string]$ExchangeOrganization #Target Exchange Organization or Online if doing offboarding back to on premises
+  )
     #Get Endpoints and Credential Data from OneShell
     $CurrentOrgAdminProfileSystems = Get-OneShellVariableValue -Name CurrentOrgAdminProfileSystems
     $CurrentOrgProfile = Get-OneShellVariableValue -Name CurrentOrgProfile
@@ -84,7 +84,7 @@ $SourceData = $Script:sourcedata
         'Sub' {$WaveData = @($SourceData | Where-Object {$_.Wave -eq $wave})} #-and $_.RecipientStatus -notin ("Missing","Duplicate")})}
     }
     #refresh MR data for batch
-    Get-MRMMoveRequestReport -Wave $wave -WaveType $wavetype -operation WaveMonitoring -ExchangeOrganization $ExchangeOrganization
+    $MR = @(Get-MRMMoveRequestReport -Wave $wave -WaveType $wavetype -operation WaveMonitoring -ExchangeOrganization $ExchangeOrganization -passthru)
     $CurrentOrgProfile = Get-OneShellVariableValue -Name CurrentOrgProfile     
     #Common Move Request Parameters
     $MRParams = @{
@@ -93,7 +93,7 @@ $SourceData = $Script:sourcedata
         LargeItemLimit = $LargeItemLimit
         BadItemLimit = $BadItemLimit
         SuspendWhenReadyToComplete = $SuspendWhenReadyToComplete
-		    Suspend = $Suspend
+        Suspend = $Suspend
         WarningAction = 'SilentlyContinue'
         ErrorAction = 'Stop'
         #consider adding parameters and values for CompleteAfter, ArchiveOnly, PrimaryOnly
@@ -101,7 +101,11 @@ $SourceData = $Script:sourcedata
     #if ($StartTime -ne $null) {$MRParams.StartAfter = $StartTime} #experimental and not supported by microsoft.
     #Create Move Request in suspended state using -Suspend and perhaps -SuspendComment parameters
     #$mraliases = ($Script:mr | Select-Object -expandproperty alias)
-    $MRIdentifiersLookup = $script:MR | Group-Object -AsHashTable -AsString -Property ExchangeGuid
+    if ($mr.count -ge 1)
+    {
+      $MRIdentifiersLookup = $MR | Group-Object -AsHashTable -AsString -Property ExchangeGuid
+    }
+    else {$MRIdentifiersLookup = @{}}
     $b = 0
     $RecordCount = $WaveData.Count
     $CurrentOrgAdminProfileSystems = Get-OneShellVariableValue -Name CurrentOrgAdminProfileSystems
