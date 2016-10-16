@@ -160,23 +160,24 @@ $SourceData = $Script:sourcedata
             Write-Progress -Activity "Creating or Verifying Move Requests" -Status "Processing Record $b of $RecordCount. Processing Request for user $identifier." -PercentComplete ($b/$RecordCount*100)  
             if (-not $MRIdentifiersLookup.ContainsKey($R.ExchangeGuid)) {
                 Connect-Exchange -ExchangeOrganization $ExchangeOrganization > $null
-                $LogString = "Creating Move Request for $identifier."
-                Write-Log -Message $LogString -Verbose -EntryType Attempting -LogPath $LogPath
+                $Message = "Create Move Request for $identifier."
+                Write-Log -Message $Message -Verbose -EntryType Attempting -LogPath $LogPath
                 $MRParams.Identity = $R.ExchangeGuid
                 $MRParams.BatchName = $r.Wave
                 $Global:ErrorActionPreference = 'Stop'
                 Invoke-ExchangeCommand -splat $MRParams -cmdlet New-MoveRequest -ExchangeOrganization $ExchangeOrganization 
                 #New-OLMoveRequest @MRParams 
-                Write-Log -Message $logstring -verbose -EntryType Succeeded -LogPath $LogPath
+                Write-Log -Message $Message -verbose -EntryType Succeeded -LogPath $LogPath
                 $Global:ErrorActionPreference = 'Continue'
             }
             else {
-                Write-Log -Message "Move Request for $identifier in Wave $($r.wave) already exists." -verbose -EntryType Notification -LogPath $LogPath
+                $message = "Move Request for $identifier in Wave $($r.wave) already exists."
+                Write-Log -Message $message -verbose -EntryType Notification -LogPath $LogPath
             }
         }#Try
         Catch {
             $Global:ErrorActionPreference = 'Continue'            
-            Write-Log -Message $logstring -Verbose -ErrorLog  -ErrorLogPath $ErrorLogPath
+            Write-Log -Message $Message -Verbose -ErrorLog  -ErrorLogPath $ErrorLogPath
             Write-Log -Message $_.tostring() -ErrorLog  -ErrorLogPath $ErrorLogPath
         }
     }#ForEach
