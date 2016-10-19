@@ -619,7 +619,7 @@ param
     [string]$WaveType
     ,
     [parameter()]
-    [ValidateSet('LargeItemReport','UpdateMigrationWaveTracking','WaveMonitoring','Offboarding')]
+    [ValidateSet('LargeItemReport','WaveMonitoring','Offboarding')]
     [string]$operation
     ,
     [datetime]$FailedSince
@@ -630,64 +630,74 @@ param
     ,
     [switch]$passthru
     ,
+    [string]$GlobalOutputVariable #Name of a variable (no $) to contain the move request and move request statistic data requested
+    ,
     [string]$ExchangeOrganization #convert to dynamic parameter later
 )
 Begin
 {
-    function Get-MoveRequestForWave {
-        switch ($WaveType) {
-            'Full' {
-                Connect-Exchange -ExchangeOrganization $ExchangeOrganization > $null
+    function Get-MoveRequestForWave
+    {
+        Connect-Exchange -ExchangeOrganization $ExchangeOrganization > $null
+        switch ($WaveType)
+        {
+            'Full'
+            {
                 $Logstring = "Get all existing wave $wave move requests"
                 Write-Log -message $Logstring -Verbose -EntryType Attempting 
                 $Script:mr = @(Invoke-ExchangeCommand -cmdlet Get-MoveRequest -string "-BatchName $Wave* -ResultSize Unlimited" -ExchangeOrganization $ExchangeOrganization | where-object {$_.batchname -match "\b$wave(\.\S*|\b)"})
                 #add error handling
             }
-            'Sub' {
-                Connect-Exchange -ExchangeOrganization $ExchangeOrganization > $null
+            'Sub'
+            {
                 $Logstring = "Get all existing sub wave $wave move requests"
                 Write-Log -message $Logstring -Verbose -EntryType Attempting 
                 $Script:mr = @(Invoke-ExchangeCommand -cmdlet Get-MoveRequest -string "-BatchName $Wave -ResultSize Unlimited" -ExchangeOrganization $ExchangeOrganization)
                 #add error handling
             }
         }
-        $Script:fmr = @($mr | ? {$_.status -eq 'Failed'})
-        $Script:ipmr = @($mr | ? {$_.status -eq 'InProgress'})
-        $Script:asmr = @($mr | ? {$_.status -eq 'AutoSuspended'})
-        $Script:cmr = @($mr | ? {$_.status -like 'Completed*'})
-        $Script:qmr = @($mr | ? {$_.status -eq 'Queued'})
+        $Script:fmr = @($mr | Where-Object -FilterScript {$_.status -eq 'Failed'})
+        $Script:ipmr = @($mr | Where-Object {$_.status -eq 'InProgress'})
+        $Script:asmr = @($mr | Where-Object {$_.status -eq 'AutoSuspended'})
+        $Script:cmr = @($mr | Where-Object {$_.status -like 'Completed*'})
+        $Script:qmr = @($mr | Where-Object {$_.status -eq 'Queued'})
     }
 }
 Process
 {
     switch ($operation) {
-        'LargeItemReport' {
+        'LargeItemReport'
+        {
             Get-MoveRequestForWave
             $logstring = "Getting Statistics for all failed $wave move requests." 
             Write-Log -Message $logstring -EntryType Attempting -Verbose
             $RecordCount=$Script:fmr.count
             $b=0
             $Script:fmrs = @()
-            foreach ($request in $fmr) {
+            foreach ($request in $fmr)
+            {
                 $b++
                 Write-Progress -Activity $logstring -Status "Processing Record $b of $RecordCount." -PercentComplete ($b/$RecordCount*100)
                 Connect-Exchange -ExchangeOrganization $ExchangeOrganization > $null
                 $Script:fmrs += Invoke-ExchangeCommand -cmdlet Get-MoveRequestStatistics -string "Identity $($request.exchangeguid)"
             }
-            if ($failedsince) {
+            if ($failedsince)
+            {
                 $logstring =  "Getting Statistics for all large item failed $wave move requests, failed since $FailedSince."
                 Write-Log -Message $logstring -EntryType Attempting -Verbose
-                $slifmrs = @($Script:fmrs | ? {$_.FailureType -eq 'TooManyLargeItemsPermanentException' -and $_.FailureTimeStamp -gt $FailedSince})
-                }                        
-            else {
+                $slifmrs = @($Script:fmrs | Where-Object {$_.FailureType -eq 'TooManyLargeItemsPermanentException' -and $_.FailureTimeStamp -gt $FailedSince})
+            }                        
+            else
+            {
                 $logstring =  "Getting Statistics for all large item failed $wave move requests."
                 Write-Log -Message $logstring -EntryType Attempting -Verbose
-                $slifmrs = @($Script:fmrs | ? {$_.FailureType -eq 'TooManyLargeItemsPermanentException'})
-                }
+                $slifmrs = @($Script:fmrs | Where-Object {$_.FailureType -eq 'TooManyLargeItemsPermanentException'})
+            }
             $RecordCount=$slifmrs.count
             $b=0
             $Script:lifmrs = @()
-            foreach ($request in $slifmrs) {
+            foreach ($request in $slifmrs)
+            {
                 $b++
                 Write-Progress -Activity "Getting move request statistics for all large item failed $wave move requests." -Status "Processing Record $b  of $RecordCount." -PercentComplete ($b/$RecordCount*100)
                 Connect-Exchange -ExchangeOrganization $ExchangeOrganization > $null
@@ -695,41 +705,33 @@ Process
             }
             $logstring = "Getting Statistics for all communication error failed $wave move requests."
             Write-Log -Message $logstring -EntryType Attempting 
-            $scefmrs = @($Script:fmrs | ? {$_.FailureType -eq 'CommunicationErrorTransientException'})
+            $scefmrs = @($Script:fmrs | Where-Object {$_.FailureType -eq 'CommunicationErrorTransientException'})
             $RecordCount=$scefmrs.count
             $b=0
             $Script:cefmrs = @()
-            foreach ($request in $scefmrs) {
+            foreach ($request in $scefmrs)
+            {
                 $b++
                 Write-Progress -Activity $logstring -Status "Processing Record $b of $RecordCount." -PercentComplete ($b/$RecordCount*100)
                 Connect-Exchange -ExchangeOrganization $ExchangeOrganization > $null
                 $Script:cefmrs += $request | ForEach-Object {Invoke-ExchangeCommand -cmdlet Get-MoveRequestStatistics -string "-Identity $($_.alias) -IncludeReport" -ExchangeOrganization $ExchangeOrganization} | Select-Object -Property Alias,AllowLargeItems,ArchiveDomain,ArchiveGuid,BadItemLimit,BadItemsEncountered,BatchName,BytesTransferred,BytesTransferredPerMinute,CompleteAfter,CompletedRequestAgeLimit,CompletionTimestamp,DiagnosticInfo,Direction,DisplayName,DistinguishedName,DoNotPreserveMailboxSignature,ExchangeGuid,FailureCode,FailureSide,FailureTimestamp,FailureType,FinalSyncTimestamp,Flags,Identity,IgnoreRuleLimitErrors,InitialSeedingCompletedTimestamp,InternalFlags,IsOffline,IsValid,ItemsTransferred,LargeItemLimit,LargeItemsEncountered,LastUpdateTimestamp,MailboxIdentity,Message,MRSServerName,OverallDuration,PercentComplete,PositionInQueue,Priority,Protect,QueuedTimestamp,RecipientTypeDetails,RemoteArchiveDatabaseGuid,RemoteArchiveDatabaseName,RemoteCredentialUsername,RemoteDatabaseGuid,RemoteDatabaseName,RemoteGlobalCatalog,RemoteHostName,SourceArchiveDatabase,SourceArchiveServer,SourceArchiveVersion,SourceDatabase,SourceServer,SourceVersion,StartAfter,StartTimestamp,Status,StatusDetail,Suspend,SuspendedTimestamp,SuspendWhenReadyToComplete,SyncStage,TargetArchiveDatabase,TargetArchiveServer,TargetArchiveVersion,TargetDatabase,TargetDeliveryDomain,TargetServer,TargetVersion,TotalArchiveItemCount,TotalArchiveSize,TotalDataReplicationWaitDuration,TotalFailedDuration,TotalFinalizationDuration,TotalIdleDuration,TotalInProgressDuration,TotalMailboxItemCount,TotalMailboxSize,TotalProxyBackoffDuration,TotalQueuedDuration,TotalStalledDueToCIDuration,TotalStalledDueToHADuration,TotalStalledDueToMailboxLockedDuration,TotalStalledDueToReadCpu,TotalStalledDueToReadThrottle,TotalStalledDueToReadUnknown,TotalStalledDueToWriteCpu,TotalStalledDueToWriteThrottle,TotalStalledDueToWriteUnknown,TotalSuspendedDuration,TotalTransientFailureDuration,ValidationMessage,WorkloadType,@{n="TotalTransientFailureMinutes";e={@($_.TotalTransientFailureDuration.TotalMinutes)}},@{n="TotalStalledDueToMailboxLockedMinutes";e={@($_.TotalStalledDueToMailboxLockedDuration.TotalMinutes)}}
            }
         }
-        'UpdateMigrationWaveTracking' {
-            $logstring = "Getting all available move requests for Migration Wave Tracking Update"
-            Write-Log -Message $logstring -EntryType Attempting
-            Connect-Exchange -ExchangeOrganization $ExchangeOrganization > $null
-            $Script:mr = Invoke-ExchangeCommand -cmdlet Get-MoveRequest -string "-ResultSize Unlimited" -ExchangeOrganization $ExchangeOrganization
-            $Script:fmr = @($mr | ? {$_.status -eq 'Failed'})
-            $Script:ipmr = @($mr | ? {$_.status -eq 'InProgress'})
-            $Script:asmr = @($mr | ? {$_.status -eq 'AutoSuspended'})
-            $Script:cmr = @($mr | ? {$_.status -like 'Completed*'})
-            $Script:qmr = @($mr | ? {$_.status -eq 'Queued'})
-        }
-        'WaveMonitoring' {
+        'WaveMonitoring'
+        {
             Get-MoveRequestForWave
         }
-        'Offboarding' {
+        'Offboarding'
+        {
             $logstring = "Getting all available offboarding move requests"
             Write-Log -Message $logstring -EntryType Attempting
             Connect-Exchange -ExchangeOrganization $ExchangeOrganization > $null
             $Script:mr = Invoke-ExchangeCommand -cmdlet Get-MoveRequest -string "-ResultSize Unlimited" | where-object {$_.direction -eq 'Push'}
-            $Script:fmr = @($mr | ? {$_.status -eq 'Failed'})
-            $Script:ipmr = @($mr | ? {$_.status -eq 'InProgress'})
-            $Script:asmr = @($mr | ? {$_.status -eq 'AutoSuspended'})
-            $Script:cmr = @($mr | ? {$_.status -like 'Completed*'})
-            $Script:qmr = @($mr | ? {$_.status -eq 'Queued'})     
+            $Script:fmr = @($mr | Where-Object {$_.status -eq 'Failed'})
+            $Script:ipmr = @($mr | Where-Object {$_.status -eq 'InProgress'})
+            $Script:asmr = @($mr | Where-Object {$_.status -eq 'AutoSuspended'})
+            $Script:cmr = @($mr | Where-Object {$_.status -like 'Completed*'})
+            $Script:qmr = @($mr | Where-Object {$_.status -eq 'Queued'})     
         }
     }
     switch ($statsoperation) {
@@ -782,6 +784,16 @@ End
     if ($passthru) {
         $Script:mr 
     }
+    if (-not [string]::IsNullOrEmpty($GlobalOutputVariable))
+    {
+      Set-Variable -Name $GlobalOutputVariable -Value @{} -Scope Global
+      $reference = Get-Variable -Name $GlobalOutputVariable -Scope Global
+      $reference.Value.MR = $Script:mr
+      if ($statsoperation -ne $null)
+      {
+        $reference.Value.MRS = $Script:mrs
+      }
+    }
 }
 }#function Get-MRMMoveRequestReport
 function Watch-MRMMoveRequest
@@ -795,7 +807,7 @@ param
     ,
     [parameter(Mandatory=$true)]
     [validateSet('Full','Sub')]
-    [string]$wavetype = 'Sub'
+    [string]$wavetype
     ,
     [parameter(Mandatory=$true)]
     [string]$wave
@@ -946,13 +958,13 @@ table td {
 #region CreateHTMLContentTables
     #Create the html content tables with the css applied    
     $IPR = $Script:ipmrs | Select-Object DisplayName,Alias,BatchName,PercentComplete,TotalMailboxSize,TotalMailboxItemCount,ItemsTransferred,Status,StatusDetail,RemoteHostName | Sort-Object PercentComplete | ConvertTo-Html -As Table -Head $css
-    $IPSR = $Script:ipmrs | Select Status,StatusDetail | Group-Object StatusDetail | sort Name | Select @{n='Status Detail';e={$_.Name}},Count| ConvertTo-Html -as Table -Head $css
+    $IPSR = $Script:ipmrs | Select-Object Status,StatusDetail | Group-Object StatusDetail | Sort-Object Name | Select-Object @{n='Status Detail';e={$_.Name}},Count| ConvertTo-Html -as Table -Head $css
     if ($Script:fmrs.count -ge 1)  {$FR = $Script:fmrs | Select-Object DisplayName,Alias,BatchName,Status,StatusDetail,FailureType,FailureSide,FailureTimestamp | Sort-Object DisplayName | ConvertTo-Html -as Table -Head $css}
     $CR = $Script:cmrs | Select-Object DisplayName,Alias,BatchName,PercentComplete,Status,StartTimeStamp,CompletionTimestamp | Sort-Object DisplayName | ConvertTo-Html -as Table -Head $css
 if ($wavetype -eq 'Full') {
-    $IPSRwS= $Script:ipmrs | select Status,StatusDetail,BatchName | Group-Object BatchName,StatusDetail | sort Name | Select @{n='Sub Wave, Status Detail';e={$_.Name}},Count | ConvertTo-Html -As Table-Head $css
-    $TMRwS = $Script:mr | Group-Object BatchName | sort Name | Select @{n='Sub Wave';e={$_.Name}},Count | ConvertTo-Html -As Table -Head $css
-    $TMRSwS = $Script:mr | Group-Object BatchName,Status | sort Name | Select @{n='Sub Wave, Status';e={$_.Name}},Count| ConvertTo-Html -As Table -Head $css
+    $IPSRwS= $Script:ipmrs | Select-Object Status,StatusDetail,BatchName | Group-Object BatchName,StatusDetail | Sort-Object Name | Select-Object @{n='Sub Wave, Status Detail';e={$_.Name}},Count | ConvertTo-Html -As Table-Head $css
+    $TMRwS = $Script:mr | Group-Object BatchName | Sort-Object Name | Select-Object @{n='Sub Wave';e={$_.Name}},Count | ConvertTo-Html -As Table -Head $css
+    $TMRSwS = $Script:mr | Group-Object BatchName,Status | Sort-Object Name | Select-Object @{n='Sub Wave, Status';e={$_.Name}},Count| ConvertTo-Html -As Table -Head $css
 }
 #endregion CreateHTMLContentTables
 #region CreateHTMLMessageBody
@@ -1028,7 +1040,7 @@ param
     ,
     [parameter(Mandatory=$true)]
     [ValidateSet('Full','Sub')]
-    [string]$WaveType = 'Sub'
+    [string]$WaveType
     ,
     [datetime]$nextrun = (get-date)
     ,
@@ -1116,7 +1128,7 @@ foreach ($request in $Script:lifmrs)
     $DisplayName = $($request.MailboxIdentity.Rdn.UnescapedName)
     $FailureTimeStamp = $($request.FailureTimeStamp)
     $QualifiedLargeItems = @(
-        $request.LargeItemList | ? {$_.WellKnownFolderType.tostring() -ne 'DumpsterDeletions'} | 
+        $request.LargeItemList | Where-Object {$_.WellKnownFolderType.tostring() -ne 'DumpsterDeletions'} | 
         foreach-object {"Subject: $($_.Subject); Folder: $($_.FolderName); Date: $($_.DateReceived); Sender: $($_.Sender); Recipient: $($_.Recipient); Size: $($_.MessageSize/1MB -as [int])MB"}
     )
     $LItemsNotDeletedList = $QualifiedLargeItems -join "`r`n"
@@ -1207,7 +1219,7 @@ switch ($PSCmdlet.ParameterSetName) {
         [string]$logpath = $logfolderpath + $Stamp + '-' + $UserPrincipalName + '-ConfigureMailboxOptions.log'
         [string]$errorlogpath = $logfolderpath + $Stamp + '-' + $UserPrincipalName + '-ERRORS-ConfigureMailboxOptions.log'
         [string]$completionsfile = $exportdataPath + $wave + '-MailboxConfigurationCompletionTracking.csv'
-        $waveSourceData = @($SourceData | ? UserPrincipalName -eq $UserPrincipalName)
+        $waveSourceData = @($SourceData | Where-Object UserPrincipalName -eq $UserPrincipalName)
     }
     'MigrationWave' {
         [string]$logpath = $logfolderpath + $Stamp + '-' + $Wave + '-ConfigureMailboxOptions.log'
@@ -1296,8 +1308,8 @@ Switch ($operation) {
             Write-Log -Message "Total New Completions Count Since Last Monitoring: $($newcompletions.count)" -Verbose -LogPath $LogPath
             if ($newcompletions.count -gt 0) {
                 $RecordCount = $newcompletions.count
-                $newcompletionsIdentities = $newcompletions | select -ExpandProperty UserPrincipalName
-                $WaveSourceData = $WaveSourceData | ? UserPrincipalName -in $newcompletionsIdentities
+                $newcompletionsIdentities = $newcompletions | Select-Object -ExpandProperty UserPrincipalName
+                $WaveSourceData = $WaveSourceData | Where-Object UserPrincipalName -in $newcompletionsIdentities
             }
             else {$waveSourceData = $null}
         }
@@ -1457,7 +1469,7 @@ if (-not $Script:FullAccessConfigurations) {
     }
 }
 if ($SingleMailbox) {
-    $FullaccessPerms = @($Script:FullAccessConfigurations | ? IdentityPrimarySmtpAddress -eq $IdentityPrimarySmtpAddress)
+    $FullaccessPerms = @($Script:FullAccessConfigurations | Where-Object IdentityPrimarySmtpAddress -eq $IdentityPrimarySmtpAddress)
 }
 else {$FullaccessPerms = $Script:FullAccessConfigurations}
 $RecordCount = $FullaccessPerms.Count
@@ -1504,12 +1516,12 @@ $errorlogpath
         }
     }
     if (-not $Script:ForwardingConfigurationsIdentities) {
-       $Script:ForwardingConfigurationsIdentities = $Script:ForwardingConfigurations | select -ExpandProperty Identity
+       $Script:ForwardingConfigurationsIdentities = $Script:ForwardingConfigurations | Select-Object -ExpandProperty Identity
     }
 
     IF ($IdentityPrimarySmtpAddress -in $Script:ForwardingConfigurationsIdentities) {
         try {
-            $forwardingconfig = $Script:ForwardingConfigurations | ? Identity -eq $IdentityPrimarySmtpAddress
+            $forwardingconfig = $Script:ForwardingConfigurations | Where-Object Identity -eq $IdentityPrimarySmtpAddress
             $forwardingparams = @{'Identity' = $forwardingconfig.Identity}
             $forwardingparams.ErrorAction = 'Stop'
             if ($forwardingconfig.ForwardingAddress) {$forwardingparams.ForwardingAddress = $forwardingconfig.ForwardingAddress}
