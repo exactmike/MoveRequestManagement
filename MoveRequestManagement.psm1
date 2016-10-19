@@ -144,7 +144,7 @@ Function New-MRMMoveRequest
                             $MRParams.RemoteHostName = $CurrentOrgProfile.ExchangeOrganizations | 
                              Where-Object {$_.name -eq $SourceSystem -and $_.OrgType -eq 'OnPremises'} | 
                              Select-Object -ExpandProperty MRSProxyServers | 
-                             Where-Object -FilterScript {$_.IsDefault -eq $True}
+                             Where-Object -FilterScript {$_.IsDefault -eq $True} |
                              Select-Object -ExpandProperty PublicFQDN | Select-Object -First 1
                         }
                         1
@@ -789,7 +789,7 @@ End
       Set-Variable -Name $GlobalOutputVariable -Value @{} -Scope Global
       $reference = Get-Variable -Name $GlobalOutputVariable -Scope Global
       $reference.Value.MR = $Script:mr
-      if ($statsoperation -ne $null)
+      if (-not [string]::IsNullOrEmpty($statsoperation))
       {
         $reference.Value.MRS = $Script:mrs
       }
