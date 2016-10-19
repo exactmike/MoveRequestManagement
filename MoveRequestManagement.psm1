@@ -576,6 +576,7 @@ if ($proceed -eq $true)
     $RecordCount = $WaveSourceData.count
     $SMRParams = @{
       ErrorAction = 'Stop'
+      Confirm = $false
     }
     if (-not [string]::IsNullOrWhiteSpace($SuspendComment))
     {
