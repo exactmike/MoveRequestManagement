@@ -626,7 +626,7 @@ param
     ,
     [parameter()]
     [ValidateSet('All','Failed','InProgress')]
-    [string]$statsoperation
+    [string]$StatsOperation
     ,
     [switch]$passthru
     ,
@@ -792,6 +792,8 @@ End
       if (-not [string]::IsNullOrEmpty($statsoperation))
       {
         $reference.Value.MRS = $Script:mrs
+        $reference.Value.FMRS = $Script:fmrs
+        $reference.Value.IPMRS = $Script:ipmrs
       }
     }
 }
