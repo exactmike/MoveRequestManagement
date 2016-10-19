@@ -591,7 +591,7 @@ if ($proceed -eq $true)
             $logstring = "Suspend Move Request $($Request.UserPrincipalName) with Exchange GUID $($request.ExchangeGuid) for Delta Sync."
             Write-Log -Message $logstring -Verbose -EntryType Attempting
             $SMRParams.Identity = $request.ExchangeGuid
-            Invoke-ExchangeCommand -cmdlet 'Suspend-MoveRequest' -ExchangeOrganization $ExchangeOrganization -splat $RMRParams
+            Invoke-ExchangeCommand -cmdlet 'Suspend-MoveRequest' -ExchangeOrganization $ExchangeOrganization -splat $SMRParams
             Write-Log -Message $logstring -Verbose -EntryType Succeeded
         }
         Catch
