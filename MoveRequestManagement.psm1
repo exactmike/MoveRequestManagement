@@ -607,6 +607,87 @@ else
     Write-Log -verbose -errorlog -Message "ERROR: Unable to Proceed with Move Request Suspensions for $wave because Convergence Check FAILED" 
 }#else
 }#function Suspend-MRMMoveRequest
+function Update-MRMMoveRequestWaveAssignment
+{
+[cmdletbinding()]
+param
+(
+    [parameter(Mandatory)]
+    [string]$wave
+    ,
+    [parameter(Mandatory)]
+    [ValidateSet('Full','Sub')]
+    [string]$wavetype
+    ,
+    [parameter(Mandatory)]
+    [string]$ExchangeOrganization #convert to dynamic parameter
+    ,
+    [parameter(Mandatory)]
+    $SourceData
+    ,
+    [switch]$ByPassConvergenceCheck
+    ,
+    [switch]$IncludeBadADLookkupStatusInConvergenceCheck
+    ,
+    [parameter()]
+    [string]$SuspendComment
+)
+foreach ($w in $wave)
+{
+switch ($wavetype)
+{
+        'Full' {$WaveSourceData = $SourceData | Where-Object {$_.Wave -match "\b$w(\.\S*|\b)"}}
+        'Sub' {$WaveSourceData = $SourceData | Where-Object {$_.wave -eq $w}}
+}
+
+    $b = 0
+    $RecordCount = $WaveSourceData.count
+    $GMRParams = @{
+      ErrorAction = 'Stop'
+    }
+    foreach ($request in $WaveSourceData)
+    {
+        $b++
+        Write-Progress -Activity "Processing Get Move Request for all existing $w move requests." -Status "Processing $($Request.UserPrincipalName), record $b of $RecordCount." -PercentComplete ($b/$RecordCount*100)
+        $MR = $null
+        Try
+        {
+            Connect-Exchange -ExchangeOrganization $ExchangeOrganization > $null
+            $message = "Get move request $($Request.UserPrincipalName) with Exchange GUID $($request.ExchangeGuid)."
+            Write-Log -Message $message -Verbose -EntryType Attempting
+            $GMRParams.Identity = $request.ExchangeGuid
+            $MR = Invoke-ExchangeCommand -cmdlet 'Get-MoveRequest' -ExchangeOrganization $ExchangeOrganization -splat $GMRParams -ErrorAction Stop
+            Write-Log -Message $message -Verbose -EntryType Succeeded
+        }
+        Catch
+        {
+          Write-Log -verbose -errorlog -Message $message -EntryType Failed
+          Write-Log -Message $_.tostring() -ErrorLog
+        }
+        if ($MR -ne $null -and [string]$($MR.BatchName) -ne [string]$($request.wave))
+        {
+          $SMRParams = @{
+            ErrorAction = 'Stop'
+            Identity = $request.ExchangeGUID
+            BatchName = [string]$($request.Wave)
+          }
+          Try
+          {
+            Connect-Exchange -ExchangeOrganization $ExchangeOrganization > $null
+            $message = "Set move request $($Request.UserPrincipalName) with Exchange GUID $($request.ExchangeGuid) from Wave $($MR.BatchName) to Wave $($request.wave)."
+            Write-Log -Message $message -Verbose -EntryType Attempting
+            Invoke-ExchangeCommand -cmdlet 'Set-MoveRequest' -ExchangeOrganization $ExchangeOrganization -splat $SMRParams -ErrorAction Stop
+            Write-Log -Message $message -Verbose -EntryType Succeeded
+          }
+          Catch
+          {
+            Write-Log -verbose -errorlog -Message $message -EntryType Failed
+            Write-Log -Message $_.tostring() -ErrorLog
+          }
+        }
+    }#foreach
+}#foreach $w in $wave
+}#function Update-MRMMoveRequestWaveAssignment
 function Get-MRMMoveRequestReport
 {
 [cmdletbinding()]
