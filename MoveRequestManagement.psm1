@@ -624,13 +624,6 @@ param
     ,
     [parameter(Mandatory)]
     $SourceData
-    ,
-    [switch]$ByPassConvergenceCheck
-    ,
-    [switch]$IncludeBadADLookkupStatusInConvergenceCheck
-    ,
-    [parameter()]
-    [string]$SuspendComment
 )
 foreach ($w in $wave)
 {
