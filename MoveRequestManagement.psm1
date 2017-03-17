@@ -763,9 +763,9 @@ Process
             $Script:asmr = @($mr | Where-Object {$_.status -eq 'AutoSuspended'})
             $Script:cmr = @($mr | Where-Object {$_.status -like 'Completed*'})
             $Script:qmr = @($mr | Where-Object {$_.status -eq 'Queued'})
+            if ($passthru)
+            {$Script:mr}
         }
-        if ($passthru)
-        {$Script:mr}
     }
     switch ($statsoperation)
     {
