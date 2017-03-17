@@ -780,7 +780,7 @@ Process
                     $b++
                     Write-Progress -Activity $logstring -Status "Processing Record $b of $RecordCount." -PercentComplete ($b/$RecordCount*100)
                     Connect-Exchange -ExchangeOrganization $ExchangeOrganization > $null
-                    $Script:mrs += Invoke-ExchangeCommand -cmdlet Get-MoveRequestStatistics -string "-Identity $($request.exchangeguid)" -ExchangeOrganization $ExchangeOrganization
+                    Invoke-ExchangeCommand -cmdlet Get-MoveRequestStatistics -string "-Identity $($request.exchangeguid)" -ExchangeOrganization $ExchangeOrganization
                 }
             )
             $Script:ipmrs = @($Script:mrs | where-object {$psitem.status -like 'InProgress'})
@@ -1334,7 +1334,7 @@ param
     ,
     [switch]$ResumeFailed
     ,
-    [int]$Runperiod #Run cycle in minutes
+    [int]$RunPeriodMinutes #Run cycle in minutes
     ,
     [datetime]$nextrun #specify the first run date/time
 )
@@ -1355,11 +1355,12 @@ $startcomplexjobparams=
             }
         if ($Args[3] -eq $true) {$SMRMRPParams.Completion = $true}
         if ($Args[4] -eq $true) {$SMRMRPParams.ResumeFailed = $true}
-        if ($Args[5] -ne $null) {$SMRMRPParams.Runperiod = $Args[5]}
+        if ($Args[5] -ne $null) {$SMRMRPParams.RunPeriodMinutes = $Args[5]}
         if ($Args[6] -ne $null) {$SMRMRPParams.nextrun = $Args[6]}
         Send-MRMMoveReportPeriodically @SMRMRPParams
     }#script
 }#startcomplexjobparams
+Start-ComplexJob @startcomplexjobparams
 }
 ###################################################################################################
 #pre/post migration configuration functions - Under Development
