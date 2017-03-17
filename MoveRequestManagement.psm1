@@ -1170,7 +1170,7 @@ param
     ,
     [datetime]$nextrun = (get-date)
     ,
-    [int]$runperiod = 60
+    [int]$RunPeriodMinutes = 60
     ,
     [parameter()]
     [validateset('Completion','Synchronization')]
@@ -1293,7 +1293,7 @@ param(
 ,
 [switch]$formatOutput
 ,
-[int]$RunIntervalSeconds = 180
+[int]$RunPeriodSeconds = 180
 )
 while ($true) 
 {
