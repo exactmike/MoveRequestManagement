@@ -1211,7 +1211,7 @@ while ($True)
         }
         Send-MRMMoveReport @SMRMMRParams
         $lastruncompletion = get-date
-        Write-Log "Last run of Watch-MoveRequest completed at $lastruncompletion." -Verbose -EntryType Notification
+        Write-Log "Last run of Send-MRMMoveReport completed at $lastruncompletion." -Verbose -EntryType Notification
     }
     $timeremaining = $nextrun - $time
     $minutes = $timeremaining.Minutes
@@ -1327,7 +1327,7 @@ param
     $Wave
     ,
     [parameter(mandatory = $true)]
-    [ValidationSet('Sub','Full')]
+    [ValidateSet('Sub','Full')]
     $WaveType
     ,
     [switch]$Completion
