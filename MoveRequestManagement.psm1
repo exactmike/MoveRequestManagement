@@ -1203,7 +1203,7 @@ while ($True)
             Operation = $Operation
             Wave = $Wave
             WaveType = $WaveType
-		        ExchangeOrganization = $ExchangeOrganization
+		    ExchangeOrganization = $ExchangeOrganization
             Sender = $Sender
             Recipients = $Recipients
             #SourceData = $SourceData
@@ -1343,15 +1343,18 @@ param
     ,
     [parameter(Mandatory)]
     [string]$Sender
+    ,
+    [parameter(Mandatory)]
+    [string]$ExchangeOrganization
 )
 $JobName = "Monitor Migration Wave: $WaveType $Wave"
 $startcomplexjobparams=
 @{
     jobfunctions = @()
     name = $JobName
-    arguments = @($AdminUserProfileIdentity,$OrgProfileIdentity,$Wave,$WaveType,$Operation,$ResumeFailed,$RunperiodMinutes,$nextrun,$Recipients,$Sender)
+    arguments = @($AdminUserProfileIdentity,$OrgProfileIdentity,$Wave,$WaveType,$Operation,$ResumeFailed,$RunperiodMinutes,$nextrun,$Recipients,$Sender,$ExchangeOrganization)
     script = [scriptblock]{
-        $AdminUserProfileIdentity,$OrgProfileIdentity,$Wave,$WaveType,$Operation,$ResumeFailed,$RunperiodMinutes,$nextrun,$Recipients,$Sender = $Args
+        $AdminUserProfileIdentity,$OrgProfileIdentity,$Wave,$WaveType,$Operation,$ResumeFailed,$RunperiodMinutes,$nextrun,$Recipients,$Sender,$ExchangeOrganization = $Args
         Import-Module OneShell
         Import-Module MoveRequestManagement
         Initialize-AdminEnvironment -AdminUserProfileIdentity $Args[0] -OrgProfileIdentity $Args[1]  #need to allow specification of profiles
@@ -1363,6 +1366,7 @@ $startcomplexjobparams=
                 Recipients = $Recipients
                 Sender = $Sender
                 ResumeFailed = $ResumeFailed
+                ExchangeOrganization = $ExchangeOrganization
             }
         
         if ($RunperiodMinutes -ne $null) {$SMRMRPParams.RunPeriodMinutes = $RunperiodMinutes}
