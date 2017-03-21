@@ -1195,7 +1195,7 @@ while ($True)
     if ($time -ge $nextrun)
     {
         $lastrunstart = get-date
-        $nextrun = $nextrun.AddMinutes($runperiod)
+        $nextrun = $nextrun.AddMinutes($RunPeriodMinutes)
         Connect-Exchange -ExchangeOrganization $ExchangeOrganization > $null
         Write-Log "Running Send-MRMMoveReport" -Verbose
         $SMRMMRParams =
