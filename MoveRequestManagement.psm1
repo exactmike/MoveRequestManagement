@@ -1284,7 +1284,7 @@ param(
 [parameter(Mandatory)]
 [string]$ExchangeOrganization
 ,
-[string[]]$PropertiesToOutput = @('identity','batchname','status','statusdetail','totalmailboxsize','percentcomplete','syncstage','*transfer*')
+[string[]]$PropertiesToOutput = @('Identity','Batchname','RemoteHostName','RemoteDatabaseName','Status','StatusDetail','TotalMailboxSize','BytesTransferred','TotalMailboxItemCount','ItemsTransferred','PercentComplete')
 ,
 [switch]$formatOutput
 ,
@@ -1306,8 +1306,8 @@ else
 {
   $StatsObjects  
 }
-Write-Log -Message "Sleeping for $RunIntervalSeconds seconds" -EntryType Notification
-Start-Sleep -Seconds $RunPeriodSeconds
+Write-Log -Message "Sleeping for $RunIntervalSeconds seconds" -EntryType Notification -Verbose
+New-Timer -units Seconds -length $RunPeriodSeconds -showprogress 
 }
 }
 function Start-MRMBackgroundMoveReporting
