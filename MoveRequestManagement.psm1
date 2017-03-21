@@ -848,7 +848,6 @@ Process
                     Invoke-ExchangeCommand -cmdlet Get-MoveRequestStatistics -string "-Identity $($request.exchangeguid)" -ExchangeOrganization $ExchangeOrganization
                 }
             )
-            $Script:ncmrs = @($Script:mrs | where-object {$psitem.status -like 'InProgress'})
             if ($passthru)
             {$Script:ncmrs}
         }
