@@ -1275,10 +1275,6 @@ function Watch-MRMMove
 {
 [cmdletbinding()]
 param(
-[parameter()]
-[ValidateSet('Completion','Synchronization')]
-[string]$Operation
-,
 [parameter(Mandatory)]
 [validateSet('Full','Sub')]
 [string]$wavetype
@@ -1297,11 +1293,11 @@ param(
 )
 while ($true) 
 {
-Write-Log -message "$(Get-TimeStamp)"
+Write-Log -message "$(Get-TimeStamp)" -Verbose
 $StatsObjects = @(Get-MRMMoveRequestReport -Wave $wave -WaveType $wavetype -operation WaveMonitoring -StatsOperation NotCompleted -Passthru -ExchangeOrganization $ExchangeOrganization)
 if ($PropertiesToOutput.Count -ge 1)
 {
-    $StatsObject = @($StatsObjects | Select-Object -Property $PropertiesToOutput)
+    $StatsObjects = @($StatsObjects | Select-Object -Property $PropertiesToOutput)
 }
 if ($formatOutput)
 {
