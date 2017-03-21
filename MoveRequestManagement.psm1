@@ -1312,7 +1312,7 @@ else
   $StatsObjects  
 }
 Write-Log -Message "Sleeping for $RunIntervalSeconds seconds" -EntryType Notification
-Start-Sleep -Seconds $RunIntervalSeconds
+Start-Sleep -Seconds $RunPeriodSeconds
 }
 }
 function Start-MRMBackgroundMoveReporting
