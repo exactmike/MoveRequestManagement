@@ -1298,7 +1298,7 @@ param(
 while ($true) 
 {
 Write-Log -message "$(Get-TimeStamp)"
-$StatsObjects = @(Get-MRMMoveRequestReport -Wave $wave -WaveType $wavetype -operation WaveMonitoring -StatsOperation NotCompleted -Passthru)
+$StatsObjects = @(Get-MRMMoveRequestReport -Wave $wave -WaveType $wavetype -operation WaveMonitoring -StatsOperation NotCompleted -Passthru -ExchangeOrganization $ExchangeOrganization)
 if ($PropertiesToOutput.Count -ge 1)
 {
     $StatsObject = @($StatsObjects | Select-Object -Property $PropertiesToOutput)
