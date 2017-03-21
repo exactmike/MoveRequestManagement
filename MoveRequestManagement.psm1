@@ -1306,7 +1306,7 @@ else
 {
   $StatsObjects  
 }
-Write-Log -Message "Sleeping for $RunIntervalSeconds seconds" -EntryType Notification -Verbose
+Write-Log -Message "Sleeping for $RunPeriodSeconds seconds" -EntryType Notification -Verbose
 New-Timer -units Seconds -length $RunPeriodSeconds -showprogress 
 }
 }
