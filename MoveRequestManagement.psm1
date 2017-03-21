@@ -1342,26 +1342,36 @@ param
     [int]$RunPeriodMinutes #Run cycle in minutes
     ,
     [datetime]$nextrun #specify the first run date/time
+    ,
+    [parameter(Mandatory)]
+    [string[]]$Recipients
+    ,
+    [parameter(Mandatory)]
+    [string]$Sender
 )
 $JobName = "Monitor Migration Wave: $WaveType $Wave"
 $startcomplexjobparams=
 @{
     jobfunctions = @()
     name = $JobName
-    arguments = @($AdminUserProfileIdentity,$OrgProfileIdentity,$Wave,$WaveType,$Operation,$ResumeFailed,$RunperiodMinutes,$nextrun)
+    arguments = @($AdminUserProfileIdentity,$OrgProfileIdentity,$Wave,$WaveType,$Operation,$ResumeFailed,$RunperiodMinutes,$nextrun,$Recipients,$Sender)
     script = [scriptblock]{
+        $AdminUserProfileIdentity,$OrgProfileIdentity,$Wave,$WaveType,$Operation,$ResumeFailed,$RunperiodMinutes,$nextrun,$Recipients,$Sender = $Args
         Import-Module OneShell
         Import-Module MoveRequestManagement
         Initialize-AdminEnvironment -AdminUserProfileIdentity $Args[0] -OrgProfileIdentity $Args[1]  #need to allow specification of profiles
         $SMRMRPParams = 
             @{
-                Wave = $Args[2]
-                WaveType = $Args[3]
-                Opertation = $Args[4]
+                Wave = $Wave
+                WaveType = $WaveType
+                Operation = $Operation
+                Recipients = $Recipients
+                Sender = $Sender
+                ResumeFailed = $ResumeFailed
             }
-        if ($Args[5] -eq $true) {$SMRMRPParams.ResumeFailed = $true}
-        if ($Args[6] -ne $null) {$SMRMRPParams.RunPeriodMinutes = $Args[5]}
-        if ($Args[7] -ne $null) {$SMRMRPParams.nextrun = $Args[6]}
+        
+        if ($RunperiodMinutes -ne $null) {$SMRMRPParams.RunPeriodMinutes = $RunperiodMinutes}
+        if ($nextrun -ne $null) {$SMRMRPParams.nextrun = $nextrun}
         Send-MRMMoveReportPeriodically @SMRMRPParams
     }#script
 }#startcomplexjobparams
