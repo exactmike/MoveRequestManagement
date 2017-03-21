@@ -1320,17 +1320,22 @@ function Start-MRMBackgroundMoveReporting
 [cmdletbinding()]
 param
 (
-    [parameter(mandatory = $true)]
+    [parameter(mandatory)]
+    $OrgProfileIdentity
+    ,
+    [parameter(mandatory)]
     $AdminUserProfileIdentity #Reccomended to use an admin user profile which logs in to minimally required systems
     ,
-    [parameter(mandatory = $true)]
+    [parameter(mandatory)]
     $Wave
     ,
-    [parameter(mandatory = $true)]
+    [parameter(mandatory)]
     [ValidateSet('Sub','Full')]
     $WaveType
     ,
-    [switch]$Completion
+    [parameter(Mandatory)]
+    [validateset('Completion','Synchronization')]
+    [string]$Operation
     ,
     [switch]$ResumeFailed
     ,
@@ -1343,20 +1348,20 @@ $startcomplexjobparams=
 @{
     jobfunctions = @()
     name = $JobName
-    arguments = @($AdminUserProfileIdentity,$Wave,$WaveType,$Completion,$ResumeFailed,$Runperiod,$nextrun)
+    arguments = @($AdminUserProfileIdentity,$OrgProfileIdentity,$Wave,$WaveType,$Operation,$ResumeFailed,$RunperiodMinutes,$nextrun)
     script = [scriptblock]{
         Import-Module OneShell
         Import-Module MoveRequestManagement
-        #Initialize-AdminEnvironment -AdminUserProfileIdentity $Args[0] #need to allow specification of profiles
+        Initialize-AdminEnvironment -AdminUserProfileIdentity $Args[0] -OrgProfileIdentity $Args[1]  #need to allow specification of profiles
         $SMRMRPParams = 
             @{
-                Wave = $Args[1]
-                WaveType = $Args[2]
+                Wave = $Args[2]
+                WaveType = $Args[3]
+                Opertation = $Args[4]
             }
-        if ($Args[3] -eq $true) {$SMRMRPParams.Completion = $true}
-        if ($Args[4] -eq $true) {$SMRMRPParams.ResumeFailed = $true}
-        if ($Args[5] -ne $null) {$SMRMRPParams.RunPeriodMinutes = $Args[5]}
-        if ($Args[6] -ne $null) {$SMRMRPParams.nextrun = $Args[6]}
+        if ($Args[5] -eq $true) {$SMRMRPParams.ResumeFailed = $true}
+        if ($Args[6] -ne $null) {$SMRMRPParams.RunPeriodMinutes = $Args[5]}
+        if ($Args[7] -ne $null) {$SMRMRPParams.nextrun = $Args[6]}
         Send-MRMMoveReportPeriodically @SMRMRPParams
     }#script
 }#startcomplexjobparams
