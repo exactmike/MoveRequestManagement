@@ -1175,12 +1175,6 @@ param
     [validateset('Completion','Synchronization')]
     [string]$Operation
     ,
-    [switch]$CompletedMailboxConfiguration
-    ,
-    [switch]$resumeautosuspended
-    ,
-    [switch]$resumefailed
-    ,
     [string[]]$Recipients
     ,
     [string]$Sender
@@ -1219,9 +1213,6 @@ while ($True)
     {
         Write-Log "Next run of Send-MRMMoveReport occurs in $minutes minutes at approximately $nextrun" -Verbose -EntryType Notification
     }
-    #if ($resumeautosuspended) {#Run Resume AutoSuspended Code}
-    #if ($resumefailed) {#Run Resume Failed Code}
-    #if ($CompletedMailboxConfiguration) {#Run Mailbox Configuration Code}
     Start-Sleep -Seconds 60
 }#while
 }#function Send-MRMMoveReportPeriodically
