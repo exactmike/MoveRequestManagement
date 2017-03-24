@@ -1323,8 +1323,6 @@ param
     [validateset('Completion','Synchronization')]
     [string]$Operation
     ,
-    [switch]$ResumeFailed
-    ,
     [int]$RunPeriodMinutes #Run cycle in minutes
     ,
     [datetime]$nextrun #specify the first run date/time
@@ -1343,12 +1341,12 @@ $startcomplexjobparams=
 @{
     jobfunctions = @()
     name = $JobName
-    arguments = @($AdminUserProfileIdentity,$OrgProfileIdentity,$Wave,$WaveType,$Operation,$ResumeFailed,$RunperiodMinutes,$nextrun,$Recipients,$Sender,$ExchangeOrganization)
+    arguments = @($AdminUserProfileIdentity,$OrgProfileIdentity,$Wave,$WaveType,$Operation,$RunperiodMinutes,$nextrun,$Recipients,$Sender,$ExchangeOrganization)
     script = [scriptblock]{
-        $AdminUserProfileIdentity,$OrgProfileIdentity,$Wave,$WaveType,$Operation,$ResumeFailed,$RunperiodMinutes,$nextrun,$Recipients,$Sender,$ExchangeOrganization = $Args
+        $AdminUserProfileIdentity,$OrgProfileIdentity,$Wave,$WaveType,$Operation,$RunperiodMinutes,$nextrun,$Recipients,$Sender,$ExchangeOrganization = $Args
         Import-Module OneShell
         Import-Module MoveRequestManagement
-        Initialize-AdminEnvironment -AdminUserProfileIdentity $Args[0] -OrgProfileIdentity $Args[1]  #need to allow specification of profiles
+        Initialize-AdminEnvironment -AdminUserProfileIdentity $AdminUserProfileIdentity -OrgProfileIdentity $OrgProfileIdentity
         $SMRMRPParams = 
             @{
                 Wave = $Wave
@@ -1356,10 +1354,8 @@ $startcomplexjobparams=
                 Operation = $Operation
                 Recipients = $Recipients
                 Sender = $Sender
-                ResumeFailed = $ResumeFailed
                 ExchangeOrganization = $ExchangeOrganization
             }
-        
         if ($RunperiodMinutes -ne $null) {$SMRMRPParams.RunPeriodMinutes = $RunperiodMinutes}
         if ($nextrun -ne $null) {$SMRMRPParams.nextrun = $nextrun}
         Send-MRMMoveReportPeriodically @SMRMRPParams
