@@ -693,7 +693,7 @@ param
     [string]$WaveType
     ,
     [parameter(Mandatory)]
-    [ValidateSet('WaveMonitoring','Offboarding','FailureAnalysis')]
+    [ValidateSet('WaveMonitoring','Offboarding','FailureAnalysis','WaveCompletionMonitoring')]
     [string]$operation
     ,
     [datetime]$FailedSince
@@ -765,6 +765,12 @@ Process
             $Script:qmr = @($mr | Where-Object {$_.status -eq 'Queued'})
             if ($passthru)
             {$Script:mr}
+        }
+        'WaveCompletionMonitoring'
+        {
+            Get-MoveRequestForWave
+            if ($passthru -and $StatsOperation -eq $null)
+            {$Script:cmr}
         }
     }
     switch ($statsoperation)
