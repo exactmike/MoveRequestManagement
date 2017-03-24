@@ -686,9 +686,10 @@ function Get-MRMMoveRequestReport
 [cmdletbinding()]
 param
 (
+    [parameter(Mandatory)]
     [string]$Wave
     ,
-    [parameter()]
+    [parameter(Mandatory)]
     [ValidateSet('Full','Sub')]
     [string]$WaveType
     ,
@@ -706,6 +707,7 @@ param
     ,
     #[string]$GlobalOutputVariable #Name of a variable (no $) to contain the move request and move request statistic data requested
     #,
+    [Parameter(Mandatory)]
     [string]$ExchangeOrganization #convert to dynamic parameter later
 )
 Begin
