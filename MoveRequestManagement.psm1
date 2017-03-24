@@ -737,6 +737,7 @@ Begin
         $Script:asmr = @($mr | Where-Object {$_.status -eq 'AutoSuspended'})
         $Script:cmr = @($mr | Where-Object {$_.status -like 'Completed*'})
         $Script:qmr = @($mr | Where-Object {$_.status -eq 'Queued'})
+        $Script:ncmr = @($mr | Where-Object {$_.status -notlike 'Completed*'})
     }
 }
 Process
@@ -845,10 +846,10 @@ Process
         'NotCompleted' {
             $logstring = "Getting move request statistics for not completed $wave move requests." 
             Write-Log -Message $logstring -EntryType Attempting
-            $RecordCount=$Script:mr.count
+            $RecordCount=$Script:ncmr.count
             $b=0
             $Script:ncmrs = @(
-                foreach ($request in $($Script:mr | where-object -FilterScript {$_.status -notlike 'complete*'}))
+                foreach ($request in $Script:ncmr )
                 {
                     $b++
                     Write-Progress -Activity $logstring -Status "Processing Record $b of $RecordCount." -PercentComplete ($b/$RecordCount*100)
@@ -1299,7 +1300,7 @@ if ($PropertiesToOutput.Count -ge 1)
 }
 if ($formatOutput)
 {
- $StatsObjects | Format-Table -AutoSize
+ $StatsObjects | Format-Table -AutoSize -Wrap
 }
 else
 {
