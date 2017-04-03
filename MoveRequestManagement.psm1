@@ -1096,7 +1096,7 @@ table td {
     if ($Script:fmrs.count -ge 1)  {$FR = $Script:fmrs | Select-Object DisplayName,Alias,BatchName,Status,StatusDetail,FailureType,FailureSide,FailureTimestamp | Sort-Object DisplayName | ConvertTo-Html -as Table -Head $css}
     $CR = $Script:cmrs | Select-Object DisplayName,Alias,BatchName,PercentComplete,Status,StartTimeStamp,CompletionTimestamp | Sort-Object DisplayName | ConvertTo-Html -as Table -Head $css
 if ($wavetype -eq 'Full') {
-    $IPSRwS= $Script:ipmrs | Select-Object Status,StatusDetail,BatchName | Group-Object BatchName,StatusDetail | Sort-Object Name | Select-Object @{n='Sub Wave, Status Detail';e={$_.Name}},Count | ConvertTo-Html -As Table-Head $css
+    $IPSRwS= $Script:ipmrs | Select-Object Status,StatusDetail,BatchName | Group-Object BatchName,StatusDetail | Sort-Object Name | Select-Object @{n='Sub Wave, Status Detail';e={$_.Name}},Count | ConvertTo-Html -As Table -Head $css
     $TMRwS = $Script:mr | Group-Object BatchName | Sort-Object Name | Select-Object @{n='Sub Wave';e={$_.Name}},Count | ConvertTo-Html -As Table -Head $css
     $TMRSwS = $Script:mr | Group-Object BatchName,Status | Sort-Object Name | Select-Object @{n='Sub Wave, Status';e={$_.Name}},Count| ConvertTo-Html -As Table -Head $css
 }
