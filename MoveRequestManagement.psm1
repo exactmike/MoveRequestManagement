@@ -162,7 +162,13 @@ Function New-MRMMoveRequest
             }
             $identifier = $r.userPrincipalName
             Write-Progress -Activity "Creating or Verifying Move Requests" -Status "Processing Record $b of $RecordCount. Processing Request for user $identifier." -PercentComplete ($b/$RecordCount*100)  
-            if (-not $MRIdentifiersLookup.ContainsKey($R.ExchangeGuid)) {
+            if ($MRIdentifiersLookup.ContainsKey($R.ExchangeGuid))
+            {
+                $message = "Move Request for $identifier in Wave $($r.wave) already exists."
+                Write-Log -Message $message -verbose -EntryType Notification -LogPath $LogPath
+            }
+            else
+            {
                 Connect-Exchange -ExchangeOrganization $ExchangeOrganization > $null
                 $Message = "Create Move Request for $identifier."
                 Write-Log -Message $Message -Verbose -EntryType Attempting -LogPath $LogPath
@@ -174,14 +180,10 @@ Function New-MRMMoveRequest
                 Write-Log -Message $Message -verbose -EntryType Succeeded -LogPath $LogPath
                 $Global:ErrorActionPreference = 'Continue'
             }
-            else {
-                $message = "Move Request for $identifier in Wave $($r.wave) already exists."
-                Write-Log -Message $message -verbose -EntryType Notification -LogPath $LogPath
-            }
         }#Try
         Catch {
             $Global:ErrorActionPreference = 'Continue'            
-            Write-Log -Message $Message -Verbose -ErrorLog  -ErrorLogPath $ErrorLogPath
+            Write-Log -Message $Message -Verbose -ErrorLog -ErrorLogPath $ErrorLogPath -EntryType Failed
             Write-Log -Message $_.tostring() -ErrorLog  -ErrorLogPath $ErrorLogPath
         }
     }#ForEach
@@ -746,13 +748,13 @@ Process
         'FailureAnalysis'
         {
             Get-MoveRequestForWave
-            if ($passthru -and $StatsOperation -eq $null)
+            if ($PSBoundParameters.ContainsKey('passthru') -and -not $PSBoundParameters.ContainsKey('StatsOperation'))
             {$Script:fmr}
         }
         'WaveMonitoring'
         {
             Get-MoveRequestForWave
-            if ($passthru -and $StatsOperation -eq $null)
+            if ($PSBoundParameters.ContainsKey('passthru') -and -not $PSBoundParameters.ContainsKey('StatsOperation'))
             {$Script:mr}
         }
         'Offboarding'
@@ -766,13 +768,13 @@ Process
             $Script:asmr = @($mr | Where-Object {$_.status -eq 'AutoSuspended'})
             $Script:cmr = @($mr | Where-Object {$_.status -like 'Completed*'})
             $Script:qmr = @($mr | Where-Object {$_.status -eq 'Queued'})
-            if ($passthru)
+            if ($PSBoundParameters.ContainsKey('passthru') -and -not $PSBoundParameters.ContainsKey('StatsOperation'))
             {$Script:mr}
         }
         'WaveCompletionMonitoring'
         {
             Get-MoveRequestForWave
-            if ($passthru -and $StatsOperation -eq $null)
+            if ($PSBoundParameters.ContainsKey('passthru') -and -not $PSBoundParameters.ContainsKey('StatsOperation'))
             {$Script:cmr}
         }
     }
@@ -795,7 +797,7 @@ Process
             $Script:ipmrs = @($Script:mrs | where-object {$psitem.status -like 'InProgress'})
             $Script:fmrs = @($Script:mrs | where-object {$psitem.status -like 'Failed'})
             $Script:cmrs = @($Script:mrs |  where-object {$psitem.status -like 'Completed*'})
-            if ($passthru)
+            if ($PSBoundParameters.ContainsKey('passthru'))
             {$Script:mrs}
         }
         'Failed' {
@@ -817,12 +819,12 @@ Process
                 $logstring =  "Filtering Statistics for $wave move requests failed since $FailedSince."
                 Write-Log -Message $logstring -EntryType Attempting -Verbose
                 $script:fsfmrs = @($Script:fmrs | Where-Object {$_.FailureTimeStamp -gt $FailedSince})
-                if ($passthru)
+                if ($PSBoundParameters.ContainsKey('passthru'))
                 {$Script:fsfmrs}
             }
             else
             {
-                if ($passthru)
+                if ($PSBoundParameters.ContainsKey('passthru'))
                 {$Script:fmrs}
             }
         }
@@ -840,7 +842,7 @@ Process
                     Invoke-ExchangeCommand -cmdlet Get-MoveRequestStatistics -string "-Identity $($request.exchangeguid)" -ExchangeOrganization $ExchangeOrganization
                 }
             )
-            if ($passthru)
+            if ($PSBoundParameters.ContainsKey('passthru'))
             {$Script:ipmrs}
         }
         'NotCompleted' {
@@ -857,7 +859,7 @@ Process
                     Invoke-ExchangeCommand -cmdlet Get-MoveRequestStatistics -string "-Identity $($request.exchangeguid)" -ExchangeOrganization $ExchangeOrganization
                 }
             )
-            if ($passthru)
+            if ($PSBoundParameters.ContainsKey('passthru'))
             {$Script:ncmrs}
         }
         'LargeItemFailure'
@@ -898,7 +900,7 @@ Process
                     $request | ForEach-Object {Invoke-ExchangeCommand -cmdlet Get-MoveRequestStatistics -string "-Identity $($_.alias) -IncludeReport" -ExchangeOrganization $ExchangeOrganization} | Select-Object -Property Alias,AllowLargeItems,ArchiveDomain,ArchiveGuid,BadItemLimit,BadItemsEncountered,BatchName,BytesTransferred,BytesTransferredPerMinute,CompleteAfter,CompletedRequestAgeLimit,CompletionTimestamp,DiagnosticInfo,Direction,DisplayName,DistinguishedName,DoNotPreserveMailboxSignature,ExchangeGuid,FailureCode,FailureSide,FailureTimestamp,FailureType,FinalSyncTimestamp,Flags,Identity,IgnoreRuleLimitErrors,InitialSeedingCompletedTimestamp,InternalFlags,IsOffline,IsValid,ItemsTransferred,LargeItemLimit,LargeItemsEncountered,LastUpdateTimestamp,MailboxIdentity,Message,MRSServerName,OverallDuration,PercentComplete,PositionInQueue,Priority,Protect,QueuedTimestamp,RecipientTypeDetails,RemoteArchiveDatabaseGuid,RemoteArchiveDatabaseName,RemoteCredentialUsername,RemoteDatabaseGuid,RemoteDatabaseName,RemoteGlobalCatalog,RemoteHostName,SourceArchiveDatabase,SourceArchiveServer,SourceArchiveVersion,SourceDatabase,SourceServer,SourceVersion,StartAfter,StartTimestamp,Status,StatusDetail,Suspend,SuspendedTimestamp,SuspendWhenReadyToComplete,SyncStage,TargetArchiveDatabase,TargetArchiveServer,TargetArchiveVersion,TargetDatabase,TargetDeliveryDomain,TargetServer,TargetVersion,TotalArchiveItemCount,TotalArchiveSize,TotalDataReplicationWaitDuration,TotalFailedDuration,TotalFinalizationDuration,TotalIdleDuration,TotalInProgressDuration,TotalMailboxItemCount,TotalMailboxSize,TotalProxyBackoffDuration,TotalQueuedDuration,TotalStalledDueToCIDuration,TotalStalledDueToHADuration,TotalStalledDueToMailboxLockedDuration,TotalStalledDueToReadCpu,TotalStalledDueToReadThrottle,TotalStalledDueToReadUnknown,TotalStalledDueToWriteCpu,TotalStalledDueToWriteThrottle,TotalStalledDueToWriteUnknown,TotalSuspendedDuration,TotalTransientFailureDuration,ValidationMessage,WorkloadType,@{n="BadItemList";e={@($_.Report.BadItems)}},@{n="LargeItemList";e={@($_.Report.LargeItems)}}
                 }
             )
-            if ($passthru)
+            if ($PSBoundParameters.ContainsKey('passthru'))
             {$Script:lifmrs}
         }
         'CommunicationFailure'
@@ -924,7 +926,7 @@ Process
                     $request | ForEach-Object {Invoke-ExchangeCommand -cmdlet Get-MoveRequestStatistics -string "-Identity $($_.alias) -IncludeReport" -ExchangeOrganization $ExchangeOrganization} | Select-Object -Property Alias,AllowLargeItems,ArchiveDomain,ArchiveGuid,BadItemLimit,BadItemsEncountered,BatchName,BytesTransferred,BytesTransferredPerMinute,CompleteAfter,CompletedRequestAgeLimit,CompletionTimestamp,DiagnosticInfo,Direction,DisplayName,DistinguishedName,DoNotPreserveMailboxSignature,ExchangeGuid,FailureCode,FailureSide,FailureTimestamp,FailureType,FinalSyncTimestamp,Flags,Identity,IgnoreRuleLimitErrors,InitialSeedingCompletedTimestamp,InternalFlags,IsOffline,IsValid,ItemsTransferred,LargeItemLimit,LargeItemsEncountered,LastUpdateTimestamp,MailboxIdentity,Message,MRSServerName,OverallDuration,PercentComplete,PositionInQueue,Priority,Protect,QueuedTimestamp,RecipientTypeDetails,RemoteArchiveDatabaseGuid,RemoteArchiveDatabaseName,RemoteCredentialUsername,RemoteDatabaseGuid,RemoteDatabaseName,RemoteGlobalCatalog,RemoteHostName,SourceArchiveDatabase,SourceArchiveServer,SourceArchiveVersion,SourceDatabase,SourceServer,SourceVersion,StartAfter,StartTimestamp,Status,StatusDetail,Suspend,SuspendedTimestamp,SuspendWhenReadyToComplete,SyncStage,TargetArchiveDatabase,TargetArchiveServer,TargetArchiveVersion,TargetDatabase,TargetDeliveryDomain,TargetServer,TargetVersion,TotalArchiveItemCount,TotalArchiveSize,TotalDataReplicationWaitDuration,TotalFailedDuration,TotalFinalizationDuration,TotalIdleDuration,TotalInProgressDuration,TotalMailboxItemCount,TotalMailboxSize,TotalProxyBackoffDuration,TotalQueuedDuration,TotalStalledDueToCIDuration,TotalStalledDueToHADuration,TotalStalledDueToMailboxLockedDuration,TotalStalledDueToReadCpu,TotalStalledDueToReadThrottle,TotalStalledDueToReadUnknown,TotalStalledDueToWriteCpu,TotalStalledDueToWriteThrottle,TotalStalledDueToWriteUnknown,TotalSuspendedDuration,TotalTransientFailureDuration,ValidationMessage,WorkloadType,@{n="TotalTransientFailureMinutes";e={@($_.TotalTransientFailureDuration.TotalMinutes)}},@{n="TotalStalledDueToMailboxLockedMinutes";e={@($_.TotalStalledDueToMailboxLockedDuration.TotalMinutes)}}
                }
            )
-           if ($passthru)
+            if ($PSBoundParameters.ContainsKey('passthru'))
            {$Script:cefmrs}
         }
     }
