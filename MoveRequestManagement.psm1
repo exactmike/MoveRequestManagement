@@ -864,7 +864,7 @@ Process
         }
         'LargeItemFailure'
         {
-            $logstring = "Getting Statistics for all failed $wave move requests." 
+            $logstring = "Getting Statistics for all $($script:fmr.Count) failed wave $wave move requests." 
             Write-Log -Message $logstring -EntryType Attempting -Verbose
             $RecordCount=$Script:fmr.count
             $b=0
@@ -874,20 +874,24 @@ Process
                     $b++
                     Write-Progress -Activity $logstring -Status "Processing Record $b of $RecordCount." -PercentComplete ($b/$RecordCount*100)
                     Connect-Exchange -ExchangeOrganization $ExchangeOrganization > $null
-                    Invoke-ExchangeCommand -cmdlet Get-MoveRequestStatistics -string "Identity $($request.exchangeguid)"
+                    $splat = @{
+                        Identity = $request.ExchangeGUID
+                    }
+                    Invoke-ExchangeCommand -cmdlet Get-MoveRequestStatistics -splat $splat -ExchangeOrganization $ExchangeOrganization
                 }
             )
             if ($failedsince)
             {
-                $logstring =  "Filtering Statistics for $wave move requests failed since $FailedSince."
+                $script:prelifmrs = @($Script:fmrs | Where-Object {$_.FailureTimeStamp -gt $FailedSince -and $_.FailureType -in ('TooManyLargeItemsPermanentException','TooManyBadItemsPermanentException')})
+                $logstring =  "Filtered Statistics for all $($script:prelifmrs.Count) large/bad item failed wave $wave move requests failed since $FailedSince."
                 Write-Log -Message $logstring -EntryType Attempting -Verbose
-                $script:prelifmrs = @($Script:fmrs | Where-Object {$_.FailureTimeStamp -gt $FailedSince -and $_.FailureType -eq 'TooManyLargeItemsPermanentException'})
             }
             else
             {
-                $logstring =  "Getting Statistics for all large item failed $wave move requests."
+                $script:prelifmrs = @($Script:fmrs | Where-Object {$_.FailureType -in ('TooManyLargeItemsPermanentException','TooManyBadItemsPermanentException')})
+                $logstring =  "Filtered Statistics for all $($script:prelifmrs.Count) large/bad item failed wave $wave move requests."
                 Write-Log -Message $logstring -EntryType Attempting -Verbose
-                $prelifmrs = @($Script:fmrs | Where-Object {$_.FailureType -eq 'TooManyLargeItemsPermanentException'})
+
             }
             $RecordCount=$prelifmrs.count
             $b=0
@@ -895,9 +899,13 @@ Process
                 foreach ($request in $prelifmrs)
                 {
                     $b++
-                    Write-Progress -Activity "Getting move request statistics for all large item failed $wave move requests." -Status "Processing Record $b  of $RecordCount." -PercentComplete ($b/$RecordCount*100)
+                    Write-Progress -Activity "Getting move request statistics for all $RecordCount large/bad item failed $wave move requests." -Status "Processing Record $b  of $RecordCount." -PercentComplete ($b/$RecordCount*100)
                     Connect-Exchange -ExchangeOrganization $ExchangeOrganization > $null
-                    $request | ForEach-Object {Invoke-ExchangeCommand -cmdlet Get-MoveRequestStatistics -string "-Identity $($_.alias) -IncludeReport" -ExchangeOrganization $ExchangeOrganization} | Select-Object -Property Alias,AllowLargeItems,ArchiveDomain,ArchiveGuid,BadItemLimit,BadItemsEncountered,BatchName,BytesTransferred,BytesTransferredPerMinute,CompleteAfter,CompletedRequestAgeLimit,CompletionTimestamp,DiagnosticInfo,Direction,DisplayName,DistinguishedName,DoNotPreserveMailboxSignature,ExchangeGuid,FailureCode,FailureSide,FailureTimestamp,FailureType,FinalSyncTimestamp,Flags,Identity,IgnoreRuleLimitErrors,InitialSeedingCompletedTimestamp,InternalFlags,IsOffline,IsValid,ItemsTransferred,LargeItemLimit,LargeItemsEncountered,LastUpdateTimestamp,MailboxIdentity,Message,MRSServerName,OverallDuration,PercentComplete,PositionInQueue,Priority,Protect,QueuedTimestamp,RecipientTypeDetails,RemoteArchiveDatabaseGuid,RemoteArchiveDatabaseName,RemoteCredentialUsername,RemoteDatabaseGuid,RemoteDatabaseName,RemoteGlobalCatalog,RemoteHostName,SourceArchiveDatabase,SourceArchiveServer,SourceArchiveVersion,SourceDatabase,SourceServer,SourceVersion,StartAfter,StartTimestamp,Status,StatusDetail,Suspend,SuspendedTimestamp,SuspendWhenReadyToComplete,SyncStage,TargetArchiveDatabase,TargetArchiveServer,TargetArchiveVersion,TargetDatabase,TargetDeliveryDomain,TargetServer,TargetVersion,TotalArchiveItemCount,TotalArchiveSize,TotalDataReplicationWaitDuration,TotalFailedDuration,TotalFinalizationDuration,TotalIdleDuration,TotalInProgressDuration,TotalMailboxItemCount,TotalMailboxSize,TotalProxyBackoffDuration,TotalQueuedDuration,TotalStalledDueToCIDuration,TotalStalledDueToHADuration,TotalStalledDueToMailboxLockedDuration,TotalStalledDueToReadCpu,TotalStalledDueToReadThrottle,TotalStalledDueToReadUnknown,TotalStalledDueToWriteCpu,TotalStalledDueToWriteThrottle,TotalStalledDueToWriteUnknown,TotalSuspendedDuration,TotalTransientFailureDuration,ValidationMessage,WorkloadType,@{n="BadItemList";e={@($_.Report.BadItems)}},@{n="LargeItemList";e={@($_.Report.LargeItems)}}
+                    $splat = @{
+                        Identity = $request.ExchangeGUID
+                        IncludeReport = $true
+                    }
+                    $request | ForEach-Object {Invoke-ExchangeCommand -cmdlet Get-MoveRequestStatistics -splat $splat -ExchangeOrganization $ExchangeOrganization} | Select-Object -Property Alias,AllowLargeItems,ArchiveDomain,ArchiveGuid,BadItemLimit,BadItemsEncountered,BatchName,BytesTransferred,BytesTransferredPerMinute,CompleteAfter,CompletedRequestAgeLimit,CompletionTimestamp,DiagnosticInfo,Direction,DisplayName,DistinguishedName,DoNotPreserveMailboxSignature,ExchangeGuid,FailureCode,FailureSide,FailureTimestamp,FailureType,FinalSyncTimestamp,Flags,Identity,IgnoreRuleLimitErrors,InitialSeedingCompletedTimestamp,InternalFlags,IsOffline,IsValid,ItemsTransferred,LargeItemLimit,LargeItemsEncountered,LastUpdateTimestamp,MailboxIdentity,Message,MRSServerName,OverallDuration,PercentComplete,PositionInQueue,Priority,Protect,QueuedTimestamp,RecipientTypeDetails,RemoteArchiveDatabaseGuid,RemoteArchiveDatabaseName,RemoteCredentialUsername,RemoteDatabaseGuid,RemoteDatabaseName,RemoteGlobalCatalog,RemoteHostName,SourceArchiveDatabase,SourceArchiveServer,SourceArchiveVersion,SourceDatabase,SourceServer,SourceVersion,StartAfter,StartTimestamp,Status,StatusDetail,Suspend,SuspendedTimestamp,SuspendWhenReadyToComplete,SyncStage,TargetArchiveDatabase,TargetArchiveServer,TargetArchiveVersion,TargetDatabase,TargetDeliveryDomain,TargetServer,TargetVersion,TotalArchiveItemCount,TotalArchiveSize,TotalDataReplicationWaitDuration,TotalFailedDuration,TotalFinalizationDuration,TotalIdleDuration,TotalInProgressDuration,TotalMailboxItemCount,TotalMailboxSize,TotalProxyBackoffDuration,TotalQueuedDuration,TotalStalledDueToCIDuration,TotalStalledDueToHADuration,TotalStalledDueToMailboxLockedDuration,TotalStalledDueToReadCpu,TotalStalledDueToReadThrottle,TotalStalledDueToReadUnknown,TotalStalledDueToWriteCpu,TotalStalledDueToWriteThrottle,TotalStalledDueToWriteUnknown,TotalSuspendedDuration,TotalTransientFailureDuration,ValidationMessage,WorkloadType,@{n="BadItemList";e={@($_.Report.BadItems)}},@{n="LargeItemList";e={@($_.Report.LargeItems)}}
                 }
             )
             if ($PSBoundParameters.ContainsKey('passthru'))
@@ -1227,50 +1235,132 @@ while ($True)
     Start-Sleep -Seconds 60
 }#while
 }#function Send-MRMMoveReportPeriodically
-function Get-MRMNonDeletedLargeItemReport
+function Get-MRMNonDeletedLargeBadItemReport
 {
 [cmdletbinding()]
 param
 (
+    [parameter(Mandatory)]
     [string]$Wave
+    ,
+    [parameter(Mandatory)]
+    [ValidateSet('Full','Sub')]
+    [string]$WaveType
     ,
     [datetime]$FailedSince
     ,
     [string]$ExchangeOrganization
     ,
-    [Parameter(Mandatory)]
-    [string]$outputCSVFileFullPathWithName
+    [parameter()]
+    [ValidateSet('BadItems','LargeItems')]
+    [string[]]$Operation
+    ,
+    [switch]$exportData
 )
 $LIReports = @()
 #hash table for parameters for Get-MoveRequestReportData
-$GetMRRD = @{}
-$GetMRRD.Wave = $Wave
-$GetMRRD.WaveType = 'Full'
-$GetMRRD.Operation = 'LargeItemReport'
-$GetMRRD.ExchangeOrganization = $ExchangeOrganization
+$GetMRRD = @{
+    Wave = $Wave
+    WaveType = $WaveType
+    Operation = 'FailureAnalysis'
+    StatsOperation = 'LargeItemFailure'
+    ExchangeOrganization = $ExchangeOrganization
+}
 if ($failedsince) {$GetMRRD.FailedSince = $FailedSince}
 Get-MRMMoveRequestReport @GetMRRD
-foreach ($request in $Script:lifmrs)
+switch ($Operation)
 {
-    $DisplayName = $($request.MailboxIdentity.Rdn.UnescapedName)
-    $FailureTimeStamp = $($request.FailureTimeStamp)
-    $QualifiedLargeItems = @(
-        $request.LargeItemList | Where-Object {$_.WellKnownFolderType.tostring() -ne 'DumpsterDeletions'} | 
-        foreach-object {"Subject: $($_.Subject); Folder: $($_.FolderName); Date: $($_.DateReceived); Sender: $($_.Sender); Recipient: $($_.Recipient); Size: $($_.MessageSize/1MB -as [int])MB"}
-    )
-    $LItemsNotDeletedList = $QualifiedLargeItems -join "`r`n"
-    $QualifiedLargeItemCount = $QualifiedLargeItems.count
-    If ($QualifiedLargeItemCount -gt 0) {
-        Connect-Exchange -ExchangeOrganization $ExchangeOrganization > $null
-        $OLRecipientPrimarySmtpAddress = Get-OLRecipient -Identity $DisplayName | Select-Object -ExpandProperty PrimarySmtpAddress
-        $LIReport = New-Object -TypeName PSObject -Property @{DisplayName = $DisplayName; PrimarySmtpAddress = $OLRecipientPrimarySmtpAddress; LargeOrBadItemCount = $QualifiedLargeItemCount; LargeOrBadItemList = $LItemsNotDeletedList; FailureTimeStamp = $FailureTimeStamp}
-        $LIReports += $LIReport | Select-Object DisplayName,PrimarySmtpAddress,LargeOrBadItemCount,LargeOrBadItemList,FailureTimeStamp
-    }
-}#foreach
-if ($LIReports.count -gt 0)
-{
-    $LIReports | Export-Csv -NoTypeInformation -Path $outputCSVFileFullPathWithName -Append
-}#If $LIReports.count -gt 0
+    {$_ -Contains 'LargeItems'}
+    {
+        $LIReports = @(
+            foreach ($request in $Script:lifmrs)
+            {
+                $QualifiedLargeItems = @(
+                    if ($request.LargeItemList.Count -gt 0)
+                    {
+                        $nonDeletedLargeItems = @($request.LargeItemList | Where-Object {$_.WellKnownFolderType.tostring() -ne 'DumpsterDeletions'})
+                    }
+                )
+                If ($nonDeletedLargeItems.Count -gt 0) {
+                    if ((Connect-Exchange -ExchangeOrganization $ExchangeOrganization))
+                    {
+                        $splat = @{
+                            Identity = $request.ExchangeGUID.guid
+                        }
+                        $Recipient = Invoke-ExchangeCommand -cmdlet 'Get-Recipient' -splat $splat -exchangeOrganization $ExchangeOrganization
+                    }
+                    else
+                    {throw {"Could not connect to Exchange Organization $($ExchangeOrganization)"}}
+                    foreach ($li in $nonDeletedLargeItems)
+                    {
+                        $LIReport = [pscustomobject]@{
+                            MailboxDisplayName = $Recipient.DisplayName
+                            MailboxPrimarySMTPAddress = $Recipient.PrimarySmtpAddress
+                            MailboxGUID = $request.ExchangeGUID.guid
+                            LargeItemCount = $nonDeletedLargeItems.Count
+                            FailureTime = $request.FailureTimeStamp
+                            Subject = $li.Subject
+                            Folder = $li.Folder
+                            DateReceived = $li.DateReceived
+                            Sender = $li.Sender
+                            Recipient = $li.Recipient
+                            SizeInMB = $($li.MessageSize/1MB -as [int])
+                        }
+                        Write-Output -InputObject $LIReport
+                    }
+                }
+            }#foreach
+        )
+        if ($LIReports.count -gt 0)
+        {
+            $exportfilepath = Export-Data -DataToExport $LIReports -DataToExportTitle LargeItemReport -DataType csv -ReturnExportFilePath
+            Write-Log -Message "Large Item Report exported to $exportfilepath" -EntryType Notification
+        }#If $LIReports.count -gt 0
+    }#LargeItems
+    {$_ -Contains 'BadItems'}
+    {
+        $BIReports = @(
+            foreach ($request in $Script:lifmrs)
+            {
+                If ($request.BadItemList.Count -gt 0) {
+                    if ((Connect-Exchange -ExchangeOrganization $ExchangeOrganization))
+                    {
+                        $splat = @{
+                            Identity = $request.ExchangeGUID.guid
+                        }
+                        $Recipient = Invoke-ExchangeCommand -cmdlet 'Get-Recipient' -splat $splat -exchangeOrganization $ExchangeOrganization
+                    }
+                    else
+                    {throw {"Could not connect to Exchange Organization $($ExchangeOrganization)"}}
+                    foreach ($bi in $request.BadItemList)
+                    {
+                        $BIReport = [pscustomobject]@{
+                            MailboxDisplayName = $Recipient.DisplayName
+                            MailboxPrimarySMTPAddress = $Recipient.PrimarySmtpAddress
+                            MailboxGUID = $request.ExchangeGUID.guid
+                            BadItemCount = $request.BadItemList.Count
+                            FailureTime = $request.FailureTimeStamp
+                            Subject = $bi.Subject
+                            Folder = $bi.FolderName
+                            DateReceived = $bi.DateReceived
+                            Sender = $bi.Sender
+                            Recipient = $bi.Recipient
+                            SizeInMB = $($bi.MessageSize/1MB -as [int])
+                            Failure = $bi.Failure
+                            FailureCategory = $bi.category
+                        }
+                        Write-Output -InputObject $BIReport
+                    }
+                }
+            }#foreach
+        )#bireports
+        if ($BIReports.count -gt 0)
+        {
+            $exportfilepath = Export-Data -DataToExport $BIReports -DataToExportTitle BadItemReport -DataType csv -ReturnExportFilePath
+            Write-Log -Message "Bad Item Report exported to $exportfilepath" -EntryType Notification
+        }#If $BIReports.count -gt 0
+    }#BadItems
+}#switch $operation
 }#function Get-MRMNonDeletedLargeItemReport
 function Watch-MRMMove
 {
