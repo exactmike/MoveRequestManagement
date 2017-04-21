@@ -1376,7 +1376,7 @@ param(
 [parameter(Mandatory)]
 [string]$ExchangeOrganization
 ,
-[string[]]$PropertiesToOutput = @('Identity','Batchname','RemoteHostName','RemoteDatabaseName','Status','StatusDetail','TotalMailboxSize','BytesTransferred','TotalMailboxItemCount','ItemsTransferred','PercentComplete')
+[string[]]$PropertiesToOutput = @('Identity','Batchname','RemoteHostName','RemoteDatabaseName','Status','StatusDetail','TotalMailboxSize','TotalMailboxItemCount','ItemsTransferred','PercentComplete')
 ,
 [switch]$formatOutput
 ,
@@ -1392,7 +1392,7 @@ if ($PropertiesToOutput.Count -ge 1)
 }
 if ($formatOutput)
 {
- $StatsObjects | Format-Table -AutoSize -Wrap
+ $StatsObjects | Format-Table -AutoSize -Wrap 
 }
 else
 {
