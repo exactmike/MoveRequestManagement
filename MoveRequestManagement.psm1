@@ -1070,7 +1070,7 @@ if ($mailNotification -and $Script:mr.count -gt 0)
     $sendmailparams.Attachments = ($ExportDataPath + 'AllStatus.csv')
     #mail contents
     #create the All Status attachment
-    $Script:mrs | Select-Object MailboxIdentity,DisplayName,Alias,@{n='Wave';e={$_.Batchname}},Status,StatusDetail,PercentComplete,CompletionTimestamp | Sort-Object DisplayName | Export-Csv -NoTypeInformation -Force -Path ($ExportDataPath + 'AllStatus.csv')
+    $Script:mrs | Select-Object MailboxIdentity,DisplayName,ExchangeGuid,Alias,@{n='Wave';e={$_.Batchname}},Status,StatusDetail,PercentComplete,CompletionTimestamp | Sort-Object DisplayName | Export-Csv -NoTypeInformation -Force -Path ($ExportDataPath + 'AllStatus.csv')
     #table css
     $css = 
 @"
@@ -1101,10 +1101,10 @@ table td {
 "@ 
 #region CreateHTMLContentTables
     #Create the html content tables with the css applied    
-    $IPR = $Script:ipmrs | Select-Object DisplayName,Alias,BatchName,PercentComplete,TotalMailboxSize,TotalMailboxItemCount,ItemsTransferred,Status,StatusDetail,RemoteHostName | Sort-Object PercentComplete | ConvertTo-Html -As Table -Head $css
+    $IPR = $Script:ipmrs | Select-Object DisplayName,Alias,ExchangeGuid,BatchName,PercentComplete,TotalMailboxSize,TotalMailboxItemCount,ItemsTransferred,Status,StatusDetail,RemoteHostName | Sort-Object PercentComplete | ConvertTo-Html -As Table -Head $css
     $IPSR = $Script:ipmrs | Select-Object Status,StatusDetail | Group-Object StatusDetail | Sort-Object Name | Select-Object @{n='Status Detail';e={$_.Name}},Count| ConvertTo-Html -as Table -Head $css
-    if ($Script:fmrs.count -ge 1)  {$FR = $Script:fmrs | Select-Object DisplayName,Alias,BatchName,Status,StatusDetail,FailureType,FailureSide,FailureTimestamp | Sort-Object DisplayName | ConvertTo-Html -as Table -Head $css}
-    $CR = $Script:cmrs | Select-Object DisplayName,Alias,BatchName,PercentComplete,Status,StartTimeStamp,CompletionTimestamp | Sort-Object DisplayName | ConvertTo-Html -as Table -Head $css
+    if ($Script:fmrs.count -ge 1)  {$FR = $Script:fmrs | Select-Object DisplayName,Alias,ExchangeGuid,BatchName,Status,StatusDetail,FailureType,FailureSide,FailureTimestamp | Sort-Object DisplayName | ConvertTo-Html -as Table -Head $css}
+    $CR = $Script:cmrs | Select-Object DisplayName,Alias,ExchangeGuid,BatchName,PercentComplete,Status,StartTimeStamp,CompletionTimestamp | Sort-Object DisplayName | ConvertTo-Html -as Table -Head $css
 if ($wavetype -eq 'Full') {
     $IPSRwS= $Script:ipmrs | Select-Object Status,StatusDetail,BatchName | Group-Object BatchName,StatusDetail | Sort-Object Name | Select-Object @{n='Sub Wave, Status Detail';e={$_.Name}},Count | ConvertTo-Html -As Table -Head $css
     $TMRwS = $Script:mr | Group-Object BatchName | Sort-Object Name | Select-Object @{n='Sub Wave';e={$_.Name}},Count | ConvertTo-Html -As Table -Head $css
