@@ -264,7 +264,7 @@ if ($proceed -eq $True)
 }
 else
 {
-    Write-Log -verbose -errorlog -Message -EntryType Failed "Unable to Set Move Requests for Completion for $wave because Convergence Check FAILED"
+    Write-Log -verbose -errorlog -Message "Unable to Set Move Requests for Completion for $wave because Convergence Check FAILED" -EntryType Failed 
 }
 }#Set-MRMMoveRequestForCompletion
 function Test-MRMConvergence
