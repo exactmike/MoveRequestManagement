@@ -1715,55 +1715,144 @@ if ($failedconfigurations.count -gt 0) {
     Export-Data -DataToExportTitle MailboxConfigurationFailures -DataToExport $failedconfigurations -datatype csv 
 }
 }
-function Set-MRMFullAccessPermissions {
+function Set-OLFullAccessPermission
+{
 [cmdletbinding()]
 param(
-    [switch]$SingleMailbox
-    ,
-    [string]$IdentityPrimarySmtpAddress
-    ,
-    $logpath
-    ,
-    $errorlogpath
-    ,
-    [switch]$automapping
+[parameter(Mandatory)]
+[psobject[]]$FullaccessPerm
+,
+[switch]$automapping 
 )
-if (-not $Script:FullAccessConfigurations) {
-    Write-Log "Identifying most recent Full Access Configurations File in Source Data Folder $ReferenceFolder"
-    Try {
-        $FullAccessConfigurationsFile = Get-ChildItem -Path $ReferenceFolder -Filter *FullAccessConfigurations.csv -ErrorAction stop | Sort-Object -Property LastWriteTime -Descending | Select-Object -First 1
-        Write-Log -message "Most recent Full Access Configurations File $($FullAccessConfigurationsFile.FullName) identified in Source Data Folder $ReferenceFolder" -Verbose 
-        $Script:FullAccessConfigurations = Import-Csv $FullAccessConfigurationsFile.FullName -ErrorAction Stop
-        }
-    Catch {
-        Write-Log -message "ERROR: Unable to identify the most recent Full Access Configurations File in Source Data Folder $ReferenceFolder" -ErrorLog
-        $_
-    }
-}
-if ($SingleMailbox) {
-    $FullaccessPerms = @($Script:FullAccessConfigurations | Where-Object IdentityPrimarySmtpAddress -eq $IdentityPrimarySmtpAddress)
-}
-else {$FullaccessPerms = $Script:FullAccessConfigurations}
-$RecordCount = $FullaccessPerms.Count
+$FullAccessApplicationErrors =@()
+$RecordCount = $FullaccessPerm.Count
 $b=0
-if ($RecordCount -gt 0) {
-    foreach ($perm in $FullaccessPerms) {
-        Connect-Exchange -ExchangeOrganization $exchangeOrganization > $null
-        $b++
-        Write-Progress -Activity "Granting FullAccess Permissions in Exchange Online from Full Access Configurations Export." -Status "Processing Record $b of $RecordCount" -PercentComplete ($b/$recordcount*100) 
-        Try {
-            Write-Log -Message "Attempt: Grant Permission to $($Perm.UserPrimarySmtpAddress) to $($Perm.AccessRights) $($perm.IdentityPrimarySmtpAddress)." -logpath $logpath
-            Add-OLMailboxPermission -AccessRights FullAccess -Identity $perm.IdentityPrimarySmtpAddress -User $perm.UserPrimarySmtpAddress -Confirm:$False -ErrorAction Stop -AutoMapping $automapping
-            Write-Log -Message "Success: Grant Permission to $($Perm.UserPrimarySmtpAddress) to $($Perm.AccessRights) $($perm.IdentityPrimarySmtpAddress)."-logpath $logpath
+if ($RecordCount -gt 0)
+{
+    foreach ($perm in $FullaccessPerm)
+    {
+	    if (!(Connect-Exchange OL)) {throw 'Could Not Connect to Exchange Online'}
+		$b++
+		Write-Progress -Activity "Granting FullAccess Permissions in Exchange Online from Full Access Configurations Export." -Status "Processing Record $b of $RecordCount" -PercentComplete ($b/$recordcount*100) 
+		if ($perm.TrusteePrimarySMTPAddress -eq '')
+        {
+            Write-Log -Message "$($Perm.PermissionType) Permission cannot be set on $($perm.TargetPrimarySMTPAddress) for unresolved recipient for Permission Identity $($Perm.PermissionIdentity)." -EntryType Notification}
+			else
+            {
+			    Try
+                {
+					$OriginalErrorActionPreference = $Global:ErrorActionPreference
+					$Global:ErrorActionPreference = 'Stop'
+                    $message = "Grant $($Perm.PermissionType) Permission on $($perm.TargetPrimarySMTPAddress) to $($Perm.TrusteePrimarySMTPAddress)."
+                    $ExistingPermissions = @(
+                        Get-OLMailboxPermission -Identity $perm.TargetPrimarySMTPAddress -User $perm.TrusteePrimarySMTPAddress | 
+                        Where-Object -FilterScript {$_.isinherited -eq $False} |  
+                        Where-Object -FilterScript {$_.AccessRights -like '*Full*'}
+                    )
+					if ($ExistingPermissions.Count -ge 1)
+                    {
+						Write-Log -Message "Pre-Existing:$message" -EntryType Notification
+					}#If
+					Else
+                    {
+						Write-Log -Message $message -EntryType Attempting
+						#Defaults to disable automapping unless -automapping switch is thrown
+                        $AddOLMailboxPermissionParams = @{
+                            AccessRights = 'FullAccess'
+                            Identity = $perm.TargetPrimarySMTPAddress
+                            User = $perm.TrusteePrimarySMTPAddress
+                            Confirm = $false
+                            ErrorAction = 'Stop'
+                        }
+						if ($PSBoundParameters.ContainsKey('automapping'))
+                        {
+                            $AddOLMailboxPermissionParams.AutoMapping = $true
+                        }
+                        Add-OLMailboxPermission @AddOLMailboxPermissionParams
+					}#End Else
+                    $Global:ErrorActionPreference = $OriginalErrorActionPreference
+				}
+				Catch
+                {
+                    $myerror = $_
+                    $Global:ErrorActionPreference = $OriginalErrorActionPreference
+					Write-Log -Message $message -ErrorLog -Verbose -EntryType Failed
+					Write-Log -Message $_.tostring() -ErrorLog
+				    $FullAccessApplicationError = [pscustomobject]@{
+                        PermissionIdentity = $perm.PermissionIdentity
+                        PermissionType = $perm.PermissionType
+                        TargetPrimarySmtpAddress=$perm.TargetPrimarySmtpAddress
+                        TrusteePrimarySmtpAddress=$perm.TrusteePrimarySmtpAddress
+                        Error=$myerror
+                    }
+				    $FullAccessApplicationErrors += $FullAccessApplicationError
+				}#Catch
+			}
+		}
+			Write-Progress -Activity "Granting FullAccess Permissions in Exchange Online " -Status "Processing Record $b of $RecordCount" -Completed
+	}
+}#End Set-OLFullAccessPermission
+function Set-OLSendAsPermission
+{
+[cmdletbinding()]
+param(
+[parameter(Mandatory)]
+[psobject[]]$SendAsPerm
+)
+$RecordCount = $SendAsPerms.Count
+$SendAsApplicationErrors =@()
+$b=0
+if ($RecordCount -gt 0)
+{
+	foreach ($perm in $SendAsPerm)
+    {
+		if (!(Connect-Exchange OL)) {throw 'Could Not Connect to Exchange Online'}
+		$b++
+		Write-Progress -Activity "Granting SendAs Permissions in Exchange Online from SendAs Export." -Status "Processing Record $b of $RecordCount" -PercentComplete ($b/$recordcount*100) 
+		if ([string]::IsNullOrWhiteSpace($perm.trusteeprimarysmtpaddress))
+        {
+            Write-Log -Message "$($Perm.PermissionType) Permission cannot be set on $($perm.TargetPrimarySmtpAddress) for unresolved recipient for Permission Identity $($perm.PermissionIdentity)"  -EntryType Notification
         }
-        Catch {
-            Write-Log -verbose -errorlog -Message "ERROR: Failed Grant Permission to $($Perm.UserPrimarySmtpAddress) to $($Perm.AccessRights) $($perm.IdentityPrimarySmtpAddress)." -LogPath $LogPath -ErrorLogPath $ErrorLogPath
-            Write-Log -Message $_.tostring() -LogPath $ErrorLogPath
-        }
-    }
-        Write-Progress -Activity "Granting FullAccess Permissions in Exchange Online to Mirror Exchange On Prem SendAS Permissions." -Status "Processing Record $b of $RecordCount" -Completed
-}
-}
+		else
+        {
+			Try
+            {
+				$OriginalErrorActionPreference = $Global:ErrorActionPreference
+				$Global:ErrorActionPreference = 'Stop'
+                $message = "Grant SendAs Permission on $($perm.TargetPrimarySmtpAddress) to $($Perm.TrusteePrimarySmtpAddress)." 
+                $ExistingPermissions = @(Get-OLRecipientPermission -Identity $perm.TargetPrimarySmtpAddress -Trustee $perm.TrusteePrimarySmtpAddress -AccessRights SendAs -ErrorAction Stop | Where-Object -FilterScript {$_.accesscontroltype -eq 'Allow'})
+				if ($ExistingPermissions.Count -ge 1)
+                {
+					Write-Log -Message "Pre-Existing:$message" -EntryType Notification 
+				}#End If
+				Else
+                {
+					Write-Log -Message $message -EntryType Attempting 
+					Add-OLRecipientPermission -AccessRights SendAs -Identity $perm.TargetPrimarySmtpAddress -Trustee $perm.TrusteePrimarySmtpAddress -Confirm:$False -ErrorAction Stop
+					Write-Log -Message $message -EntryType Succeeded
+				}#End Else
+			}#try
+			Catch
+            {
+                $myerror = $_
+                $Global:ErrorActionPreference = $OriginalErrorActionPreference
+				Write-Log -Message $message -EntryType Failed -ErrorLog -Verbose
+                Write-Log -Message $myerror.tostring() -ErrorLog
+				$SendAsApplicationError = [pscustomobject]@{
+                    PermissionIdentity = $perm.PermissionIdentity
+                    PermissionType = $perm.PermissionType
+                    TargetPrimarySmtpAddress=$perm.TargetPrimarySmtpAddress
+                    TrusteePrimarySmtpAddress=$perm.TrusteePrimarySmtpAddress
+                    Error=$myerror
+                }
+				$SendAsApplicationErrors += $SendAsApplicationError
+			}#catch
+		}#else
+	}#foreach
+    Write-Progress -Activity "Granting SendAs Permissions in Exchange Online " -Status "Processing Record $b of $RecordCount" -Completed
+    Write-Output -InputObject $SendAsApplicationErrors
+}#if
+}#End Set-OLSendAsPermission
 function Set-MRMForwardingConfiguration {
 [cmdletbinding()]
 param(
