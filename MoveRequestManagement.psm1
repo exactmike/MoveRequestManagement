@@ -1733,63 +1733,64 @@ if ($RecordCount -gt 0)
 	    if (!(Connect-Exchange OL)) {throw 'Could Not Connect to Exchange Online'}
 		$b++
 		Write-Progress -Activity "Granting FullAccess Permissions in Exchange Online from Full Access Configurations Export." -Status "Processing Record $b of $RecordCount" -PercentComplete ($b/$recordcount*100) 
-		if ($perm.TrusteePrimarySMTPAddress -eq '')
+		if ([string]::IsNullOrWhiteSpace($perm.TrusteePrimarySMTPAddress))
         {
-            Write-Log -Message "$($Perm.PermissionType) Permission cannot be set on $($perm.TargetPrimarySMTPAddress) for unresolved recipient for Permission Identity $($Perm.PermissionIdentity)." -EntryType Notification}
-			else
+            Write-Log -Message "$($Perm.PermissionType) Permission cannot be set on $($perm.TargetPrimarySMTPAddress) for unresolved recipient for Permission Identity $($Perm.PermissionIdentity)." -EntryType Notification
+        }
+		else
+        {
+		    Try
             {
-			    Try
+				$OriginalErrorActionPreference = $Global:ErrorActionPreference
+				$Global:ErrorActionPreference = 'Stop'
+                $message = "Grant $($Perm.PermissionType) Permission on $($perm.TargetPrimarySMTPAddress) to $($Perm.TrusteePrimarySMTPAddress)."
+                $ExistingPermissions = @(
+                    Get-OLMailboxPermission -Identity $perm.TargetPrimarySMTPAddress -User $perm.TrusteePrimarySMTPAddress | 
+                    Where-Object -FilterScript {$_.isinherited -eq $False} |  
+                    Where-Object -FilterScript {$_.AccessRights -like '*Full*'}
+                )
+				if ($ExistingPermissions.Count -ge 1)
                 {
-					$OriginalErrorActionPreference = $Global:ErrorActionPreference
-					$Global:ErrorActionPreference = 'Stop'
-                    $message = "Grant $($Perm.PermissionType) Permission on $($perm.TargetPrimarySMTPAddress) to $($Perm.TrusteePrimarySMTPAddress)."
-                    $ExistingPermissions = @(
-                        Get-OLMailboxPermission -Identity $perm.TargetPrimarySMTPAddress -User $perm.TrusteePrimarySMTPAddress | 
-                        Where-Object -FilterScript {$_.isinherited -eq $False} |  
-                        Where-Object -FilterScript {$_.AccessRights -like '*Full*'}
-                    )
-					if ($ExistingPermissions.Count -ge 1)
-                    {
-						Write-Log -Message "Pre-Existing:$message" -EntryType Notification
-					}#If
-					Else
-                    {
-						Write-Log -Message $message -EntryType Attempting
-						#Defaults to disable automapping unless -automapping switch is thrown
-                        $AddOLMailboxPermissionParams = @{
-                            AccessRights = 'FullAccess'
-                            Identity = $perm.TargetPrimarySMTPAddress
-                            User = $perm.TrusteePrimarySMTPAddress
-                            Confirm = $false
-                            ErrorAction = 'Stop'
-                        }
-						if ($PSBoundParameters.ContainsKey('automapping'))
-                        {
-                            $AddOLMailboxPermissionParams.AutoMapping = $true
-                        }
-                        Add-OLMailboxPermission @AddOLMailboxPermissionParams
-					}#End Else
-                    $Global:ErrorActionPreference = $OriginalErrorActionPreference
-				}
-				Catch
+					Write-Log -Message "Pre-Existing:$message" -EntryType Notification
+				}#If
+				Else
                 {
-                    $myerror = $_
-                    $Global:ErrorActionPreference = $OriginalErrorActionPreference
-					Write-Log -Message $message -ErrorLog -Verbose -EntryType Failed
-					Write-Log -Message $_.tostring() -ErrorLog
-				    $FullAccessApplicationError = [pscustomobject]@{
-                        PermissionIdentity = $perm.PermissionIdentity
-                        PermissionType = $perm.PermissionType
-                        TargetPrimarySmtpAddress=$perm.TargetPrimarySmtpAddress
-                        TrusteePrimarySmtpAddress=$perm.TrusteePrimarySmtpAddress
-                        Error=$myerror
+					Write-Log -Message $message -EntryType Attempting
+					#Defaults to disable automapping unless -automapping switch is thrown
+                    $AddOLMailboxPermissionParams = @{
+                        AccessRights = 'FullAccess'
+                        Identity = $perm.TargetPrimarySMTPAddress
+                        User = $perm.TrusteePrimarySMTPAddress
+                        Confirm = $false
+                        ErrorAction = 'Stop'
                     }
-				    Write-output -inputobject $FullAccessApplicationError
-				}#Catch
-			}
-		}
-			Write-Progress -Activity "Granting FullAccess Permissions in Exchange Online " -Status "Processing Record $b of $RecordCount" -Completed
-	}
+					if ($PSBoundParameters.ContainsKey('automapping'))
+                    {
+                        $AddOLMailboxPermissionParams.AutoMapping = $true
+                    }
+                    Add-OLMailboxPermission @AddOLMailboxPermissionParams
+				}#Else
+                $Global:ErrorActionPreference = $OriginalErrorActionPreference
+			}#Try
+			Catch
+            {
+                $myerror = $_
+                $Global:ErrorActionPreference = $OriginalErrorActionPreference
+				Write-Log -Message $message -ErrorLog -Verbose -EntryType Failed
+				Write-Log -Message $_.tostring() -ErrorLog
+				$FullAccessApplicationError = [pscustomobject]@{
+                    PermissionIdentity = $perm.PermissionIdentity
+                    PermissionType = $perm.PermissionType
+                    TargetPrimarySmtpAddress=$perm.TargetPrimarySmtpAddress
+                    TrusteePrimarySmtpAddress=$perm.TrusteePrimarySmtpAddress
+                    Error=$myerror
+                }
+				Write-output -inputobject $FullAccessApplicationError
+			}#Catch
+		}#else
+	}#foreach
+	Write-Progress -Activity "Granting FullAccess Permissions in Exchange Online " -Status "Processing Record $b of $RecordCount" -Completed
+}#if
 }#End Set-OLFullAccessPermission
 function Set-OLSendAsPermission
 {
