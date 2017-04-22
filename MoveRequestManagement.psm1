@@ -1724,7 +1724,6 @@ param(
 ,
 [switch]$automapping 
 )
-$FullAccessApplicationErrors =@()
 $RecordCount = $FullaccessPerm.Count
 $b=0
 if ($RecordCount -gt 0)
@@ -1785,7 +1784,7 @@ if ($RecordCount -gt 0)
                         TrusteePrimarySmtpAddress=$perm.TrusteePrimarySmtpAddress
                         Error=$myerror
                     }
-				    $FullAccessApplicationErrors += $FullAccessApplicationError
+				    Write-output -inputobject $FullAccessApplicationError
 				}#Catch
 			}
 		}
@@ -1800,7 +1799,6 @@ param(
 [psobject[]]$SendAsPerm
 )
 $RecordCount = $SendAsPerm.Count
-$SendAsApplicationErrors =@()
 $b=0
 if ($RecordCount -gt 0)
 {
@@ -1845,7 +1843,7 @@ if ($RecordCount -gt 0)
                     TrusteePrimarySmtpAddress=$perm.TrusteePrimarySmtpAddress
                     Error=$myerror
                 }
-				$SendAsApplicationErrors += $SendAsApplicationError
+				Write-output -inputobject $SendAsApplicationError
 			}#catch
 		}#else
 	}#foreach
