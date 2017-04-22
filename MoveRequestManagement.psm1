@@ -1799,7 +1799,7 @@ param(
 [parameter(Mandatory)]
 [psobject[]]$SendAsPerm
 )
-$RecordCount = $SendAsPerms.Count
+$RecordCount = $SendAsPerm.Count
 $SendAsApplicationErrors =@()
 $b=0
 if ($RecordCount -gt 0)
