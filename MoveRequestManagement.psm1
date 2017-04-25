@@ -1467,6 +1467,239 @@ Start-ComplexJob @startcomplexjobparams
 ###################################################################################################
 #pre/post migration configuration functions - Under Development
 ###################################################################################################
+function Set-MRMFullAccessPermission
+{
+[cmdletbinding()]
+param(
+[parameter(Mandatory)]
+[psobject[]]$FullaccessPerm
+,
+[switch]$automapping
+)
+DynamicParam
+{
+    New-ExchangeOrganizationDynamicParameter -Mandatory
+}
+
+$RecordCount = $FullaccessPerm.Count
+$b=0
+if ($RecordCount -gt 0)
+{
+    foreach ($perm in $FullaccessPerm)
+    {
+	    if ((Connect-Exchange $ExchangeOrganization) -ne $true) {throw "Could Not Connect to Exchange Organization $ExchangeOrganization"}
+		$b++
+		Write-Progress -Activity "Granting FullAccess Permissions in Exchange Online from Full Access Configurations Export." -Status "Processing Record $b of $RecordCount" -PercentComplete ($b/$recordcount*100) 
+		if ([string]::IsNullOrWhiteSpace($perm.TrusteePrimarySMTPAddress) -or $perm.TrusteePrimarySMTPAddress -eq 'none')
+        {
+            Write-Log -Message "Skipping permission identity $($Perm.PermissionIdentity) for $($perm.TargetPrimarySMTPAddress). It has a NULL/None value for TrusteePrimarySMTPAddress." -EntryType Notification
+        }
+		else
+        {
+		    Try
+            {
+				$OriginalErrorActionPreference = $Global:ErrorActionPreference
+				$Global:ErrorActionPreference = 'Stop'
+                $message = "Grant $($Perm.PermissionType) Permission on $($perm.TargetPrimarySMTPAddress) to $($Perm.TrusteePrimarySMTPAddress)."
+                $ExistingPermissions = @(
+                    Get-OLMailboxPermission -Identity $perm.TargetPrimarySMTPAddress -User $perm.TrusteePrimarySMTPAddress | 
+                    Where-Object -FilterScript {$_.isinherited -eq $False} |  
+                    Where-Object -FilterScript {$_.AccessRights -like '*Full*'}
+                )
+				if ($ExistingPermissions.Count -ge 1)
+                {
+					Write-Log -Message "Pre-Existing:$message" -EntryType Notification
+				}#If
+				Else
+                {
+					Write-Log -Message $message -EntryType Attempting
+					#Defaults to disable automapping unless -automapping switch is thrown
+                    $AddOLMailboxPermissionParams = @{
+                        AccessRights = 'FullAccess'
+                        Identity = $perm.TargetPrimarySMTPAddress
+                        User = $perm.TrusteePrimarySMTPAddress
+                        Confirm = $false
+                        ErrorAction = 'Stop'
+                    }
+					if ($PSBoundParameters.ContainsKey('automapping'))
+                    {
+                        $AddOLMailboxPermissionParams.AutoMapping = $true
+                    }
+                    Add-OLMailboxPermission @AddOLMailboxPermissionParams
+				}#Else
+                $Global:ErrorActionPreference = $OriginalErrorActionPreference
+			}#Try
+			Catch
+            {
+                $myerror = $_
+                $Global:ErrorActionPreference = $OriginalErrorActionPreference
+				Write-Log -Message $message -ErrorLog -Verbose -EntryType Failed
+				Write-Log -Message $_.tostring() -ErrorLog
+				$FullAccessApplicationError = [pscustomobject]@{
+                    PermissionIdentity = $perm.PermissionIdentity
+                    PermissionType = $perm.PermissionType
+                    TargetPrimarySmtpAddress=$perm.TargetPrimarySmtpAddress
+                    TrusteePrimarySmtpAddress=$perm.TrusteePrimarySmtpAddress
+                    Error=$myerror
+                }
+				Write-output -inputobject $FullAccessApplicationError
+			}#Catch
+		}#else
+	}#foreach
+	Write-Progress -Activity "Granting FullAccess Permissions in Exchange Online " -Status "Processing Record $b of $RecordCount" -Completed
+}#if
+}#End Set-OLFullAccessPermission
+function Set-MRMSendAsPermission
+{
+[cmdletbinding()]
+param(
+[parameter(Mandatory)]
+[psobject[]]$SendAsPerm
+)
+$RecordCount = $SendAsPerm.Count
+$b=0
+if ($RecordCount -gt 0)
+{
+	foreach ($perm in $SendAsPerm)
+    {
+		if (!(Connect-Exchange OL)) {throw 'Could Not Connect to Exchange Online'}
+		$b++
+		Write-Progress -Activity "Granting SendAs Permissions in Exchange Online from SendAs Export." -Status "Processing Record $b of $RecordCount" -PercentComplete ($b/$recordcount*100) 
+		if ([string]::IsNullOrWhiteSpace($perm.trusteeprimarysmtpaddress))
+        {
+            Write-Log -Message "$($Perm.PermissionType) Permission cannot be set on $($perm.TargetPrimarySmtpAddress) for unresolved recipient for Permission Identity $($perm.PermissionIdentity)"  -EntryType Notification
+        }
+		else
+        {
+			Try
+            {
+				$OriginalErrorActionPreference = $Global:ErrorActionPreference
+				$Global:ErrorActionPreference = 'Stop'
+                $message = "Grant SendAs Permission on $($perm.TargetPrimarySmtpAddress) to $($Perm.TrusteePrimarySmtpAddress)." 
+                $ExistingPermissions = @(Get-OLRecipientPermission -Identity $perm.TargetPrimarySmtpAddress -Trustee $perm.TrusteePrimarySmtpAddress -AccessRights SendAs -ErrorAction Stop | Where-Object -FilterScript {$_.accesscontroltype -eq 'Allow'})
+				if ($ExistingPermissions.Count -ge 1)
+                {
+					Write-Log -Message "Pre-Existing:$message" -EntryType Notification 
+				}#End If
+				Else
+                {
+					Write-Log -Message $message -EntryType Attempting 
+					Add-OLRecipientPermission -AccessRights SendAs -Identity $perm.TargetPrimarySmtpAddress -Trustee $perm.TrusteePrimarySmtpAddress -Confirm:$False -ErrorAction Stop
+					Write-Log -Message $message -EntryType Succeeded
+				}#End Else
+			}#try
+			Catch
+            {
+                $myerror = $_
+                $Global:ErrorActionPreference = $OriginalErrorActionPreference
+				Write-Log -Message $message -EntryType Failed -ErrorLog -Verbose
+                Write-Log -Message $myerror.tostring() -ErrorLog
+				$SendAsApplicationError = [pscustomobject]@{
+                    PermissionIdentity = $perm.PermissionIdentity
+                    PermissionType = $perm.PermissionType
+                    TargetPrimarySmtpAddress=$perm.TargetPrimarySmtpAddress
+                    TrusteePrimarySmtpAddress=$perm.TrusteePrimarySmtpAddress
+                    Error=$myerror
+                }
+				Write-output -inputobject $SendAsApplicationError
+			}#catch
+		}#else
+	}#foreach
+    Write-Progress -Activity "Granting SendAs Permissions in Exchange Online " -Status "Processing Record $b of $RecordCount" -Completed
+    Write-Output -InputObject $SendAsApplicationErrors
+}#if
+}#End Set-OLSendAsPermission
+function Set-MRMForwardingConfiguration {
+[cmdletbinding()]
+param(
+[parameter(Mandatory=$True,ValueFromPipeline = $true)]
+$IdentityPrimarySmtpAddress
+,
+$logpath
+,
+$errorlogpath
+)
+#Load Forwarding Configurations File into memory if needed
+    if (-not $Script:ForwardingConfigurations) {
+        Write-Log "Identifying most recent Forwarding Configurations File in Source Data Folder $ReferenceFolder"
+        Try {
+            $ForwardingConfigurationsFile = Get-ChildItem -Path $ReferenceFolder -Filter *ForwardingConfigurations.csv -ErrorAction stop | Sort-Object -Property LastWriteTime -Descending | Select-Object -First 1
+            Write-Log -message "Most recent Forwarding Configurations File $($ForwardingConfigurationsFile.FullName) identified in Source Data Folder $ReferenceFolder" -Verbose 
+            If ($ForwardingConfigurationsFile) {$Script:ForwardingConfigurations = Import-Csv $ForwardingConfigurationsFile.FullName -ErrorAction Stop}
+            }
+        Catch {
+            Write-Log -message "ERROR: Unable to identify the most recent Forwarding Configurations File in Source Data Folder $ReferenceFolder" -ErrorLog
+            $_
+        }
+    }
+    if (-not $Script:ForwardingConfigurationsIdentities) {
+       $Script:ForwardingConfigurationsIdentities = $Script:ForwardingConfigurations | Select-Object -ExpandProperty Identity
+    }
+
+    IF ($IdentityPrimarySmtpAddress -in $Script:ForwardingConfigurationsIdentities) {
+        try {
+            $forwardingconfig = $Script:ForwardingConfigurations | Where-Object Identity -eq $IdentityPrimarySmtpAddress
+            $forwardingparams = @{'Identity' = $forwardingconfig.Identity}
+            $forwardingparams.ErrorAction = 'Stop'
+            if ($forwardingconfig.ForwardingAddress) {$forwardingparams.ForwardingAddress = $forwardingconfig.ForwardingAddress}
+            if ($forwardingconfig.ForwardingSmtpAddress) {$forwardingparams.ForwardingSmtpAddress = $forwardingconfig.ForwardingSmtpAddress}
+            if ($forwardingconfig.DeliverToMailboxAndForward -eq 'TRUE') {$forwardingparams.DeliverToMailboxAndForward = $true}
+            write-log -message "Attempt: Set Forwarding Configuration for $identityPrimarySmtpAddress." -logpath $logpath
+            Set-OLmailbox @forwardingparams 
+            write-log -message "Success: Set Forwarding Configuration for $identityPrimarySmtpAddress." -logpath $logpath
+        }
+        catch {
+            write-log -message "ERROR: Fail to Set Forwarding Configuration for $identityPrimarySmtpAddress." -logpath $logpath -errorlogpath $errorlogpath -errorlog -verbose
+            write-log -message $_.tostring() -errorlogpath $errorlogpath -errorlog 
+        }
+    }
+    Else {Write-Log -message "No Forwarding Configuration Found for $identityPrimarySmtpAddress." -logpath $logpath -Verbose}
+}
+Function Set-MRMMailboxQuotas {
+[cmdletbinding()]
+Param(
+[parameter(Mandatory=$True,Position=0)]
+[string]$Identity
+,
+[parameter(Mandatory=$True,Position=1)]
+[ValidateSet('E4''E3','E2','E1','K1','Resource','Shared','None')]
+[string]$Quotas
+,
+$logpath
+,
+$errorlogpath
+)
+Begin {}
+Process{
+    #Quota, Retention Policy, and Deleted Item Retention Configuration
+    $Message = "Setting for $Identity : $LicenseTypeDesired Quotas"
+    if ($LogPath) {Write-Log -Message $message -Verbose -LogPath $LogPath}
+    else {Write-Host $message -ForegroundColor Cyan}
+        
+    $SetMailboxParams = @{}
+    $SetMailboxParams.Identity = $Identity
+    Switch ($Quotas) {
+        'E4' {$SetMailboxParams = $SetMailboxParams + $Global:E3Quotas}
+        'E3' {$SetMailboxParams = $SetMailboxParams + $Global:E3Quotas}
+        'E2' {$SetMailboxParams = $SetMailboxParams + $Global:E2Quotas}
+        'E1' {$SetMailboxParams = $SetMailboxParams + $Global:E1Quotas}
+        'K1' {$SetMailboxParams = $SetMailboxParams + $Global:K1Quotas}
+        'Resource' {$SetMailboxParams = $SetMailboxParams + $Global:SRQuotas}
+        'Shared' {$SetMailboxParams = $SetMailboxParams + $Global:SRQuotas}
+        'None' {$SetMailboxParams = $SetMailboxParams + $Global:SRQuotas}
+        Default {$SetMailboxParams = $SetMailboxParams + $Global:SRQuotas}            
+    }
+    Try {
+        Set-OlMailbox @SetMailboxParams 
+    }
+    Catch {
+            Write-Log -Message "Error: Failed Setting Mailbox Quotas for $Identity" -Verbose -ErrorLog
+            Write-Log -Message $_.tostring() -ErrorLog 
+            $_
+    }
+}
+End {}
+}
 function Set-MRMMailboxConfigurationOptions {
 [cmdletbinding()]
 param(
@@ -1714,232 +1947,4 @@ if ($failedconfigurations.count -gt 0) {
     Write-Log -Message "Attempting Export of Failed Mailbox Configurations to Export Data Folder $ExportDataPath." -Verbose -LogPath $LogPath
     Export-Data -DataToExportTitle MailboxConfigurationFailures -DataToExport $failedconfigurations -datatype csv 
 }
-}
-function Set-OLFullAccessPermission
-{
-[cmdletbinding()]
-param(
-[parameter(Mandatory)]
-[psobject[]]$FullaccessPerm
-,
-[switch]$automapping 
-)
-$RecordCount = $FullaccessPerm.Count
-$b=0
-if ($RecordCount -gt 0)
-{
-    foreach ($perm in $FullaccessPerm)
-    {
-	    if (!(Connect-Exchange OL)) {throw 'Could Not Connect to Exchange Online'}
-		$b++
-		Write-Progress -Activity "Granting FullAccess Permissions in Exchange Online from Full Access Configurations Export." -Status "Processing Record $b of $RecordCount" -PercentComplete ($b/$recordcount*100) 
-		if ([string]::IsNullOrWhiteSpace($perm.TrusteePrimarySMTPAddress))
-        {
-            Write-Log -Message "$($Perm.PermissionType) Permission cannot be set on $($perm.TargetPrimarySMTPAddress) for unresolved recipient for Permission Identity $($Perm.PermissionIdentity)." -EntryType Notification
-        }
-		else
-        {
-		    Try
-            {
-				$OriginalErrorActionPreference = $Global:ErrorActionPreference
-				$Global:ErrorActionPreference = 'Stop'
-                $message = "Grant $($Perm.PermissionType) Permission on $($perm.TargetPrimarySMTPAddress) to $($Perm.TrusteePrimarySMTPAddress)."
-                $ExistingPermissions = @(
-                    Get-OLMailboxPermission -Identity $perm.TargetPrimarySMTPAddress -User $perm.TrusteePrimarySMTPAddress | 
-                    Where-Object -FilterScript {$_.isinherited -eq $False} |  
-                    Where-Object -FilterScript {$_.AccessRights -like '*Full*'}
-                )
-				if ($ExistingPermissions.Count -ge 1)
-                {
-					Write-Log -Message "Pre-Existing:$message" -EntryType Notification
-				}#If
-				Else
-                {
-					Write-Log -Message $message -EntryType Attempting
-					#Defaults to disable automapping unless -automapping switch is thrown
-                    $AddOLMailboxPermissionParams = @{
-                        AccessRights = 'FullAccess'
-                        Identity = $perm.TargetPrimarySMTPAddress
-                        User = $perm.TrusteePrimarySMTPAddress
-                        Confirm = $false
-                        ErrorAction = 'Stop'
-                    }
-					if ($PSBoundParameters.ContainsKey('automapping'))
-                    {
-                        $AddOLMailboxPermissionParams.AutoMapping = $true
-                    }
-                    Add-OLMailboxPermission @AddOLMailboxPermissionParams
-				}#Else
-                $Global:ErrorActionPreference = $OriginalErrorActionPreference
-			}#Try
-			Catch
-            {
-                $myerror = $_
-                $Global:ErrorActionPreference = $OriginalErrorActionPreference
-				Write-Log -Message $message -ErrorLog -Verbose -EntryType Failed
-				Write-Log -Message $_.tostring() -ErrorLog
-				$FullAccessApplicationError = [pscustomobject]@{
-                    PermissionIdentity = $perm.PermissionIdentity
-                    PermissionType = $perm.PermissionType
-                    TargetPrimarySmtpAddress=$perm.TargetPrimarySmtpAddress
-                    TrusteePrimarySmtpAddress=$perm.TrusteePrimarySmtpAddress
-                    Error=$myerror
-                }
-				Write-output -inputobject $FullAccessApplicationError
-			}#Catch
-		}#else
-	}#foreach
-	Write-Progress -Activity "Granting FullAccess Permissions in Exchange Online " -Status "Processing Record $b of $RecordCount" -Completed
-}#if
-}#End Set-OLFullAccessPermission
-function Set-OLSendAsPermission
-{
-[cmdletbinding()]
-param(
-[parameter(Mandatory)]
-[psobject[]]$SendAsPerm
-)
-$RecordCount = $SendAsPerm.Count
-$b=0
-if ($RecordCount -gt 0)
-{
-	foreach ($perm in $SendAsPerm)
-    {
-		if (!(Connect-Exchange OL)) {throw 'Could Not Connect to Exchange Online'}
-		$b++
-		Write-Progress -Activity "Granting SendAs Permissions in Exchange Online from SendAs Export." -Status "Processing Record $b of $RecordCount" -PercentComplete ($b/$recordcount*100) 
-		if ([string]::IsNullOrWhiteSpace($perm.trusteeprimarysmtpaddress))
-        {
-            Write-Log -Message "$($Perm.PermissionType) Permission cannot be set on $($perm.TargetPrimarySmtpAddress) for unresolved recipient for Permission Identity $($perm.PermissionIdentity)"  -EntryType Notification
-        }
-		else
-        {
-			Try
-            {
-				$OriginalErrorActionPreference = $Global:ErrorActionPreference
-				$Global:ErrorActionPreference = 'Stop'
-                $message = "Grant SendAs Permission on $($perm.TargetPrimarySmtpAddress) to $($Perm.TrusteePrimarySmtpAddress)." 
-                $ExistingPermissions = @(Get-OLRecipientPermission -Identity $perm.TargetPrimarySmtpAddress -Trustee $perm.TrusteePrimarySmtpAddress -AccessRights SendAs -ErrorAction Stop | Where-Object -FilterScript {$_.accesscontroltype -eq 'Allow'})
-				if ($ExistingPermissions.Count -ge 1)
-                {
-					Write-Log -Message "Pre-Existing:$message" -EntryType Notification 
-				}#End If
-				Else
-                {
-					Write-Log -Message $message -EntryType Attempting 
-					Add-OLRecipientPermission -AccessRights SendAs -Identity $perm.TargetPrimarySmtpAddress -Trustee $perm.TrusteePrimarySmtpAddress -Confirm:$False -ErrorAction Stop
-					Write-Log -Message $message -EntryType Succeeded
-				}#End Else
-			}#try
-			Catch
-            {
-                $myerror = $_
-                $Global:ErrorActionPreference = $OriginalErrorActionPreference
-				Write-Log -Message $message -EntryType Failed -ErrorLog -Verbose
-                Write-Log -Message $myerror.tostring() -ErrorLog
-				$SendAsApplicationError = [pscustomobject]@{
-                    PermissionIdentity = $perm.PermissionIdentity
-                    PermissionType = $perm.PermissionType
-                    TargetPrimarySmtpAddress=$perm.TargetPrimarySmtpAddress
-                    TrusteePrimarySmtpAddress=$perm.TrusteePrimarySmtpAddress
-                    Error=$myerror
-                }
-				Write-output -inputobject $SendAsApplicationError
-			}#catch
-		}#else
-	}#foreach
-    Write-Progress -Activity "Granting SendAs Permissions in Exchange Online " -Status "Processing Record $b of $RecordCount" -Completed
-    Write-Output -InputObject $SendAsApplicationErrors
-}#if
-}#End Set-OLSendAsPermission
-function Set-MRMForwardingConfiguration {
-[cmdletbinding()]
-param(
-[parameter(Mandatory=$True,ValueFromPipeline = $true)]
-$IdentityPrimarySmtpAddress
-,
-$logpath
-,
-$errorlogpath
-)
-#Load Forwarding Configurations File into memory if needed
-    if (-not $Script:ForwardingConfigurations) {
-        Write-Log "Identifying most recent Forwarding Configurations File in Source Data Folder $ReferenceFolder"
-        Try {
-            $ForwardingConfigurationsFile = Get-ChildItem -Path $ReferenceFolder -Filter *ForwardingConfigurations.csv -ErrorAction stop | Sort-Object -Property LastWriteTime -Descending | Select-Object -First 1
-            Write-Log -message "Most recent Forwarding Configurations File $($ForwardingConfigurationsFile.FullName) identified in Source Data Folder $ReferenceFolder" -Verbose 
-            If ($ForwardingConfigurationsFile) {$Script:ForwardingConfigurations = Import-Csv $ForwardingConfigurationsFile.FullName -ErrorAction Stop}
-            }
-        Catch {
-            Write-Log -message "ERROR: Unable to identify the most recent Forwarding Configurations File in Source Data Folder $ReferenceFolder" -ErrorLog
-            $_
-        }
-    }
-    if (-not $Script:ForwardingConfigurationsIdentities) {
-       $Script:ForwardingConfigurationsIdentities = $Script:ForwardingConfigurations | Select-Object -ExpandProperty Identity
-    }
-
-    IF ($IdentityPrimarySmtpAddress -in $Script:ForwardingConfigurationsIdentities) {
-        try {
-            $forwardingconfig = $Script:ForwardingConfigurations | Where-Object Identity -eq $IdentityPrimarySmtpAddress
-            $forwardingparams = @{'Identity' = $forwardingconfig.Identity}
-            $forwardingparams.ErrorAction = 'Stop'
-            if ($forwardingconfig.ForwardingAddress) {$forwardingparams.ForwardingAddress = $forwardingconfig.ForwardingAddress}
-            if ($forwardingconfig.ForwardingSmtpAddress) {$forwardingparams.ForwardingSmtpAddress = $forwardingconfig.ForwardingSmtpAddress}
-            if ($forwardingconfig.DeliverToMailboxAndForward -eq 'TRUE') {$forwardingparams.DeliverToMailboxAndForward = $true}
-            write-log -message "Attempt: Set Forwarding Configuration for $identityPrimarySmtpAddress." -logpath $logpath
-            Set-OLmailbox @forwardingparams 
-            write-log -message "Success: Set Forwarding Configuration for $identityPrimarySmtpAddress." -logpath $logpath
-        }
-        catch {
-            write-log -message "ERROR: Fail to Set Forwarding Configuration for $identityPrimarySmtpAddress." -logpath $logpath -errorlogpath $errorlogpath -errorlog -verbose
-            write-log -message $_.tostring() -errorlogpath $errorlogpath -errorlog 
-        }
-    }
-    Else {Write-Log -message "No Forwarding Configuration Found for $identityPrimarySmtpAddress." -logpath $logpath -Verbose}
-}
-Function Set-MRMMailboxQuotas {
-[cmdletbinding()]
-Param(
-[parameter(Mandatory=$True,Position=0)]
-[string]$Identity
-,
-[parameter(Mandatory=$True,Position=1)]
-[ValidateSet('E4''E3','E2','E1','K1','Resource','Shared','None')]
-[string]$Quotas
-,
-$logpath
-,
-$errorlogpath
-)
-Begin {}
-Process{
-    #Quota, Retention Policy, and Deleted Item Retention Configuration
-    $Message = "Setting for $Identity : $LicenseTypeDesired Quotas"
-    if ($LogPath) {Write-Log -Message $message -Verbose -LogPath $LogPath}
-    else {Write-Host $message -ForegroundColor Cyan}
-        
-    $SetMailboxParams = @{}
-    $SetMailboxParams.Identity = $Identity
-    Switch ($Quotas) {
-        'E4' {$SetMailboxParams = $SetMailboxParams + $Global:E3Quotas}
-        'E3' {$SetMailboxParams = $SetMailboxParams + $Global:E3Quotas}
-        'E2' {$SetMailboxParams = $SetMailboxParams + $Global:E2Quotas}
-        'E1' {$SetMailboxParams = $SetMailboxParams + $Global:E1Quotas}
-        'K1' {$SetMailboxParams = $SetMailboxParams + $Global:K1Quotas}
-        'Resource' {$SetMailboxParams = $SetMailboxParams + $Global:SRQuotas}
-        'Shared' {$SetMailboxParams = $SetMailboxParams + $Global:SRQuotas}
-        'None' {$SetMailboxParams = $SetMailboxParams + $Global:SRQuotas}
-        Default {$SetMailboxParams = $SetMailboxParams + $Global:SRQuotas}            
-    }
-    Try {
-        Set-OlMailbox @SetMailboxParams 
-    }
-    Catch {
-            Write-Log -Message "Error: Failed Setting Mailbox Quotas for $Identity" -Verbose -ErrorLog
-            Write-Log -Message $_.tostring() -ErrorLog 
-            $_
-    }
-}
-End {}
 }
