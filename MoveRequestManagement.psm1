@@ -1478,76 +1478,93 @@ param(
 )
 DynamicParam
 {
-    New-ExchangeOrganizationDynamicParameter -Mandatory
+    $Dictionary = New-ExchangeOrganizationDynamicParameter -Mandatory
+    Write-Output -InputObject $Dictionary
 }
-
+process
+{
+#Dynamic Parameter to Variable Binding
+Set-DynamicParameterVariable -dictionary $Dictionary
 $RecordCount = $FullaccessPerm.Count
 $b=0
-if ($RecordCount -gt 0)
+foreach ($perm in $FullaccessPerm)
 {
-    foreach ($perm in $FullaccessPerm)
+	$b++
+	Write-Progress -Activity "Granting FullAccess Permissions in Exchange Online from FullAccess Permissions Export." -Status "Processing Record $b of $RecordCount" -PercentComplete ($b/$recordcount*100) 
+	if ([string]::IsNullOrWhiteSpace($perm.TrusteePrimarySMTPAddress) -or $perm.TrusteePrimarySMTPAddress -eq 'none')
     {
-	    if ((Connect-Exchange $ExchangeOrganization) -ne $true) {throw "Could Not Connect to Exchange Organization $ExchangeOrganization"}
-		$b++
-		Write-Progress -Activity "Granting FullAccess Permissions in Exchange Online from Full Access Configurations Export." -Status "Processing Record $b of $RecordCount" -PercentComplete ($b/$recordcount*100) 
-		if ([string]::IsNullOrWhiteSpace($perm.TrusteePrimarySMTPAddress) -or $perm.TrusteePrimarySMTPAddress -eq 'none')
+        Write-Log -Message "Skipping permission identity $($Perm.PermissionIdentity) for $($perm.TargetPrimarySMTPAddress). It has a NULL/None value for TrusteePrimarySMTPAddress." -EntryType Notification
+    }
+	else
+    {
+		Try
         {
-            Write-Log -Message "Skipping permission identity $($Perm.PermissionIdentity) for $($perm.TargetPrimarySMTPAddress). It has a NULL/None value for TrusteePrimarySMTPAddress." -EntryType Notification
-        }
-		else
-        {
-		    Try
+            $message = "Find existing $($Perm.PermissionType) Permission on Target $($perm.TargetPrimarySMTPAddress) for Trustee $($Perm.TrusteePrimarySMTPAddress)."
+            $InvokeExchangeCommandParameters = @{
+                ExchangeOrganization = $exchangeOrganization
+                cmdlet = 'Get-MailboxPermission'
+                ErrorAction = 'Stop'
+                checkConnection = $true
+                splat = @{
+                    Identity = $perm.TargetPrimarySMTPAddress
+                    User = $perm.TrusteePrimarySMTPAddress
+                    ErrorAction = 'Stop'
+                }
+            }
+            Write-Log -Message $message -EntryType Attempting
+            $ExistingPermissions = @(
+                Invoke-ExchangeCommand @InvokeExchangeCommandParameters | 
+                Where-Object -FilterScript {$_.isinherited -eq $False} |  
+                Where-Object -FilterScript {$_.AccessRights -like '*Full*'}
+            )
+			if ($ExistingPermissions.Count -ge 1)
             {
-				$OriginalErrorActionPreference = $Global:ErrorActionPreference
-				$Global:ErrorActionPreference = 'Stop'
-                $message = "Grant $($Perm.PermissionType) Permission on $($perm.TargetPrimarySMTPAddress) to $($Perm.TrusteePrimarySMTPAddress)."
-                $ExistingPermissions = @(
-                    Get-OLMailboxPermission -Identity $perm.TargetPrimarySMTPAddress -User $perm.TrusteePrimarySMTPAddress | 
-                    Where-Object -FilterScript {$_.isinherited -eq $False} |  
-                    Where-Object -FilterScript {$_.AccessRights -like '*Full*'}
-                )
-				if ($ExistingPermissions.Count -ge 1)
-                {
-					Write-Log -Message "Pre-Existing:$message" -EntryType Notification
-				}#If
-				Else
-                {
-					Write-Log -Message $message -EntryType Attempting
-					#Defaults to disable automapping unless -automapping switch is thrown
-                    $AddOLMailboxPermissionParams = @{
+				Write-Log -Message $message -EntryType Succeeded
+			}#If
+			Else
+            {
+                $message = "Add $($Perm.PermissionType) Permission on Target $($perm.TargetPrimarySMTPAddress) for Trustee $($Perm.TrusteePrimarySMTPAddress)."
+				Write-Log -Message $message -EntryType Attempting
+				#Defaults to disable automapping unless -automapping switch is thrown
+                $InvokeExchangeCommandParameters = @{
+                    ExchangeOrganization = $exchangeOrganization
+                    cmdlet = 'Add-MailboxPermission'
+                    ErrorAction = 'Stop'
+                    checkConnection = $true
+                    Splat = @{
                         AccessRights = 'FullAccess'
                         Identity = $perm.TargetPrimarySMTPAddress
                         User = $perm.TrusteePrimarySMTPAddress
                         Confirm = $false
                         ErrorAction = 'Stop'
                     }
-					if ($PSBoundParameters.ContainsKey('automapping'))
-                    {
-                        $AddOLMailboxPermissionParams.AutoMapping = $true
-                    }
-                    Add-OLMailboxPermission @AddOLMailboxPermissionParams
-				}#Else
-                $Global:ErrorActionPreference = $OriginalErrorActionPreference
-			}#Try
-			Catch
-            {
-                $myerror = $_
-                $Global:ErrorActionPreference = $OriginalErrorActionPreference
-				Write-Log -Message $message -ErrorLog -Verbose -EntryType Failed
-				Write-Log -Message $_.tostring() -ErrorLog
-				$FullAccessApplicationError = [pscustomobject]@{
-                    PermissionIdentity = $perm.PermissionIdentity
-                    PermissionType = $perm.PermissionType
-                    TargetPrimarySmtpAddress=$perm.TargetPrimarySmtpAddress
-                    TrusteePrimarySmtpAddress=$perm.TrusteePrimarySmtpAddress
-                    Error=$myerror
                 }
-				Write-output -inputobject $FullAccessApplicationError
-			}#Catch
-		}#else
-	}#foreach
-	Write-Progress -Activity "Granting FullAccess Permissions in Exchange Online " -Status "Processing Record $b of $RecordCount" -Completed
-}#if
+				if ($PSBoundParameters.ContainsKey('automapping'))
+                {
+                    $InvokeExchangeCommandParameters.Splat.AutoMapping = $true
+                }
+                Invoke-ExchangeCommand @InvokeExchangeCommandParameters
+				Write-Log -Message $message -EntryType Succeeded
+			}#Else
+		}#Try
+		Catch
+        {
+            $myerror = $_
+			Write-Log -Message $message -ErrorLog -Verbose -EntryType Failed
+			Write-Log -Message $_.tostring() -ErrorLog
+			$PermissionApplicationError = [pscustomobject]@{
+                PermissionIdentity = $perm.PermissionIdentity
+                PermissionType = $perm.PermissionType
+                TargetPrimarySmtpAddress=$perm.TargetPrimarySmtpAddress
+                TrusteePrimarySmtpAddress=$perm.TrusteePrimarySmtpAddress
+                Error=$myerror
+            }
+			Write-output -inputobject $PermissionApplicationError
+		}#Catch
+	}#else
+}#foreach
+Write-Progress -Activity "Granting FullAccess Permissions in Exchange Online " -Status "Processing Record $b of $RecordCount" -Completed
+}#process
 }#End Set-OLFullAccessPermission
 function Set-MRMSendAsPermission
 {
@@ -1556,58 +1573,105 @@ param(
 [parameter(Mandatory)]
 [psobject[]]$SendAsPerm
 )
+DynamicParam
+{
+    $Dictionary = New-ExchangeOrganizationDynamicParameter -Mandatory
+    Write-Output -InputObject $Dictionary
+}
+begin
+{
+    #Dynamic Parameter to Variable Binding
+    Set-DynamicParameterVariable -dictionary $Dictionary
+    if ((Connect-Exchange -ExchangeOrganization $ExchangeOrganization) -eq $true)
+    {
+       if (Test-ExchangeCommandExists -ExchangeOrganization $ExchangeOrganization -cmdlet 'Get-RecipientPermission')
+       {$CommandNoun = 'RecipientPermission'}
+       else
+       {
+            $CommandNoun = 'ADPermission'
+            throw "The Set-MRMSendAsPermission function is only able to set SendAs Permissions in Exchange Online.  Exchange Organzation $ExchangeOrganization, does not appear to be an Exchange Online instance."
+       }
+    }
+}
+process
+{
+
 $RecordCount = $SendAsPerm.Count
 $b=0
-if ($RecordCount -gt 0)
+foreach ($perm in $SendAsPerm)
 {
-	foreach ($perm in $SendAsPerm)
+	$b++
+	Write-Progress -Activity "Granting SendAs Permissions in Exchange Organization $ExchangeOrganization." -Status "Processing Record $b of $RecordCount" -PercentComplete ($b/$recordcount*100) 
+	if ([string]::IsNullOrWhiteSpace($perm.TrusteePrimarySMTPAddress) -or $perm.TrusteePrimarySMTPAddress -eq 'none')
     {
-		if (!(Connect-Exchange OL)) {throw 'Could Not Connect to Exchange Online'}
-		$b++
-		Write-Progress -Activity "Granting SendAs Permissions in Exchange Online from SendAs Export." -Status "Processing Record $b of $RecordCount" -PercentComplete ($b/$recordcount*100) 
-		if ([string]::IsNullOrWhiteSpace($perm.trusteeprimarysmtpaddress))
+        Write-Log -Message "Skipping permission identity $($Perm.PermissionIdentity) for $($perm.TargetPrimarySMTPAddress). It has a NULL/None value for TrusteePrimarySMTPAddress." -EntryType Notification
+    }
+	else
+    {
+		Try
         {
-            Write-Log -Message "$($Perm.PermissionType) Permission cannot be set on $($perm.TargetPrimarySmtpAddress) for unresolved recipient for Permission Identity $($perm.PermissionIdentity)"  -EntryType Notification
-        }
-		else
-        {
-			Try
-            {
-				$OriginalErrorActionPreference = $Global:ErrorActionPreference
-				$Global:ErrorActionPreference = 'Stop'
-                $message = "Grant SendAs Permission on $($perm.TargetPrimarySmtpAddress) to $($Perm.TrusteePrimarySmtpAddress)." 
-                $ExistingPermissions = @(Get-OLRecipientPermission -Identity $perm.TargetPrimarySmtpAddress -Trustee $perm.TrusteePrimarySmtpAddress -AccessRights SendAs -ErrorAction Stop | Where-Object -FilterScript {$_.accesscontroltype -eq 'Allow'})
-				if ($ExistingPermissions.Count -ge 1)
-                {
-					Write-Log -Message "Pre-Existing:$message" -EntryType Notification 
-				}#End If
-				Else
-                {
-					Write-Log -Message $message -EntryType Attempting 
-					Add-OLRecipientPermission -AccessRights SendAs -Identity $perm.TargetPrimarySmtpAddress -Trustee $perm.TrusteePrimarySmtpAddress -Confirm:$False -ErrorAction Stop
-					Write-Log -Message $message -EntryType Succeeded
-				}#End Else
-			}#try
-			Catch
-            {
-                $myerror = $_
-                $Global:ErrorActionPreference = $OriginalErrorActionPreference
-				Write-Log -Message $message -EntryType Failed -ErrorLog -Verbose
-                Write-Log -Message $myerror.tostring() -ErrorLog
-				$SendAsApplicationError = [pscustomobject]@{
-                    PermissionIdentity = $perm.PermissionIdentity
-                    PermissionType = $perm.PermissionType
-                    TargetPrimarySmtpAddress=$perm.TargetPrimarySmtpAddress
-                    TrusteePrimarySmtpAddress=$perm.TrusteePrimarySmtpAddress
-                    Error=$myerror
+            $message = "Find existing $($Perm.PermissionType) Permission on Target $($perm.TargetPrimarySMTPAddress) for Trustee $($Perm.TrusteePrimarySMTPAddress)."
+            $InvokeExchangeCommandParameters = @{
+                ExchangeOrganization = $exchangeOrganization
+                cmdlet = 'Get-RecipientPermission'
+                ErrorAction = 'Stop'
+                checkConnection = $true
+                splat = @{
+                    Identity = $perm.TargetPrimarySMTPAddress
+                    Trustee = $perm.TrusteePrimarySMTPAddress
+                    AccessRights = 'SendAs'
+                    ErrorAction = 'Stop'
                 }
-				Write-output -inputobject $SendAsApplicationError
-			}#catch
-		}#else
-	}#foreach
-    Write-Progress -Activity "Granting SendAs Permissions in Exchange Online " -Status "Processing Record $b of $RecordCount" -Completed
-    Write-Output -InputObject $SendAsApplicationErrors
-}#if
+            }
+            Write-Log -Message $message -EntryType Attempting
+            $ExistingPermissions = @(
+                Invoke-ExchangeCommand @InvokeExchangeCommandParameters | 
+                Where-Object -FilterScript {$_.accesscontroltype -eq 'Allow'}  
+            )
+			if ($ExistingPermissions.Count -ge 1)
+            {
+				Write-Log -Message $message -EntryType Succeeded
+			}#If
+			Else
+            {
+                $message = "Add $($Perm.PermissionType) Permission on Target $($perm.TargetPrimarySMTPAddress) for Trustee $($Perm.TrusteePrimarySMTPAddress)."
+				Write-Log -Message $message -EntryType Attempting
+				#Defaults to disable automapping unless -automapping switch is thrown
+                $InvokeExchangeCommandParameters = @{
+                    ExchangeOrganization = $exchangeOrganization
+                    cmdlet = 'Add-RecipientPermission'
+                    ErrorAction = 'Stop'
+                    checkConnection = $true
+                    Splat = @{
+                        AccessRights = 'SendAs'
+                        Identity = $perm.TargetPrimarySMTPAddress
+                        Trustee = $perm.TrusteePrimarySMTPAddress
+                        Confirm = $false
+                        ErrorAction = 'Stop'
+                    }
+                }
+                Invoke-ExchangeCommand @InvokeExchangeCommandParameters
+				Write-Log -Message $message -EntryType Succeeded
+			}#End Else
+		}#try
+		Catch
+        {
+            $myerror = $_
+			Write-Log -Message $message -EntryType Failed -ErrorLog -Verbose
+            Write-Log -Message $myerror.tostring() -ErrorLog
+			$PermissionApplicationError = [pscustomobject]@{
+                PermissionIdentity = $perm.PermissionIdentity
+                PermissionType = $perm.PermissionType
+                TargetPrimarySmtpAddress=$perm.TargetPrimarySmtpAddress
+                TrusteePrimarySmtpAddress=$perm.TrusteePrimarySmtpAddress
+                Error=$myerror
+            }
+			Write-output -inputobject $PermissionApplicationError
+		}#catch
+	}#else
+}#foreach
+Write-Progress -Activity "Granting SendAs Permissions in Exchange Online " -Status "Processing Record $b of $RecordCount" -Completed
+}#process
 }#End Set-OLSendAsPermission
 function Set-MRMForwardingConfiguration {
 [cmdletbinding()]
