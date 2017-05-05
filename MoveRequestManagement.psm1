@@ -958,6 +958,8 @@ param
     ,
     [string[]]$Recipients
     ,
+    [string[]]$BCCRecipients
+    ,
     [string]$Sender
     ,
     [string]$ExchangeOrganization
@@ -1065,6 +1067,7 @@ if ($mailNotification -and $Script:mr.count -gt 0)
     #below needs to go in admin user profile or org profile
 	$Sendmailparams.From = $Sender
     $Sendmailparams.To = $Recipients
+    if ($BCCRecipients.Count -ge 1) {$Sendmailparams.BCC = $BCCRecipients}
     $Sendmailparams.SmtpServer = (Get-OneShellVariableValue -Name CurrentOrgProfile).general.mailrelayserverFQDN
     $sendmailparams.BodyAsHtml = $true
     $sendmailparams.Attachments = ($ExportDataPath + 'AllStatus.csv')
@@ -1196,6 +1199,8 @@ param
     ,
     [string[]]$Recipients
     ,
+    [string[]]$BCCRecipients
+    ,
     [string]$Sender
     ,
     [string]$ExchangeOrganization #convert to Dynamic Parameter
@@ -1221,6 +1226,7 @@ while ($True)
             Recipients = $Recipients
             #SourceData = $SourceData
         }
+        if ($BCCRecipients.Count -ge 1) {$SMRMMRParams.BCCRecipients = $BCCRecipients}
         Send-MRMMoveReport @SMRMMRParams
         $lastruncompletion = get-date
         Write-Log "Last run of Send-MRMMoveReport completed at $lastruncompletion." -Verbose -EntryType Notification
@@ -1431,6 +1437,8 @@ param
     [parameter(Mandatory)]
     [string[]]$Recipients
     ,
+    [string[]]$BCCRecipients
+    ,
     [parameter(Mandatory)]
     [string]$Sender
     ,
@@ -1459,6 +1467,7 @@ $startcomplexjobparams=
             }
         if ($RunperiodMinutes -ne $null) {$SMRMRPParams.RunPeriodMinutes = $RunperiodMinutes}
         if ($nextrun -ne $null) {$SMRMRPParams.nextrun = $nextrun}
+        if ($BCCRecipients.Count -ge 1) {$SMRMRPParams.BCCRecipients = $BCCRecipients}
         Send-MRMMoveReportPeriodically @SMRMRPParams
     }#script
 }#startcomplexjobparams
@@ -1472,7 +1481,7 @@ function Set-MRMFullAccessPermission
 [cmdletbinding()]
 param(
 [parameter(Mandatory)]
-[psobject[]]$FullaccessPerm
+[psobject[]]$FullaccessPerm #need to add validation of permissiontype
 ,
 [switch]$automapping
 )
@@ -1571,7 +1580,7 @@ function Set-MRMSendAsPermission
 [cmdletbinding()]
 param(
 [parameter(Mandatory)]
-[psobject[]]$SendAsPerm
+[psobject[]]$SendAsPerm #need to add validation of permissiontype
 )
 DynamicParam
 {
